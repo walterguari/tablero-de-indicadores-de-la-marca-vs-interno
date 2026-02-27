@@ -6,7 +6,7 @@ st.set_page_config(page_title="Tablero de Indicadores", layout="wide")
 st.title("📊 Tablero de Indicadores: Marca vs Interno")
 
 # URL de tu Google Sheet publicada como CSV
-SHEET_URL = "PASA_AQUI_TU_URL_DE_GOOGLE_SHEETS_CSV"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit?gid=567460007#gid=567460007"
 
 def load_data():
     return pd.read_csv(SHEET_URL)
