@@ -9,9 +9,10 @@ ID_DOC = "1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNto"
 
 # 2. DICCIONARIO DE HOJAS (Actualiza los GID según corresponda)
 HOJAS = {
+    "Enc. Interna CONTAC": "1131519764",
+    "TASA DE EMAIL Y RESP": "877908159"
     "Enc Roar": "567460007",
-    "VN ROAR": "PON_AQUI_EL_GID_DE_VN_ROAR",
-    "TASA DE EMAIL Y RESP": "PON_AQUI_EL_GID_DE_TASA_EMAIL"
+    "VN ROAR": "0",
 }
 
 # Selector en la barra lateral
