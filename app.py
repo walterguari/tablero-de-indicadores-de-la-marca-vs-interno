@@ -1,15 +1,15 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Tablero de Indicadores", layout="wide")
 st.title("📊 Tablero de Indicadores: Marca vs Interno")
 
-# 2. ENLACE DE PUBLICACIÓN CORREGIDO
-# Basado en tu imagen de 'Publicar en la web', este es el enlace base:
+# 2. ENLACE DE PUBLICACIÓN BASE (Copiado de tu imagen de Sheets)
 URL_BASE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQBTifZuxjKR35zQencq2bgSWLVMSVir_OkQF1jwTumpJBwSwmxB865sllzXre5b1RFkyn1pVQhE2lf/pub?output=csv"
 
-# DICCIONARIO DE HOJAS CON GIDs CORRECTOS
+# DICCIONARIO DE HOJAS (Comas corregidas para evitar SyntaxError)
 HOJAS = {
     "Enc. Interna CONTAC": "1131519764",
     "TASA DE EMAIL Y RESP": "877908159",
@@ -22,55 +22,51 @@ seleccion = st.sidebar.selectbox("Selecciona la hoja", list(HOJAS.keys()))
 
 @st.cache_data(ttl=600)
 def load_data(gid):
-    # Combinamos la URL base con el ID de la hoja específica
+    # Construcción dinámica del enlace para cada pestaña
     url_final = f"{URL_BASE}&gid={gid}"
-    # on_bad_lines='skip' evita el error de la línea 84 que tuviste antes
     return pd.read_csv(url_final, on_bad_lines='skip', dtype=str)
 
-# --- FUNCIONES PARA INDICADORES ---
-def calcular_metricas_q(df):
-    # Filtrar columnas que empiezan con Q
-    cols_q = [c for c in df.columns if str(c).upper().startswith('Q')]
-    
-    if not cols_q:
-        return
-        
-    st.subheader("📈 Indicadores de Medición (Enc Roar)")
-    # Mostramos los indicadores en columnas
-    columnas_web = st.columns(min(len(cols_q), 5))
-    
-    for i, col in enumerate(cols_q):
-        datos = df[col].dropna()
-        if datos.empty:
-            continue
-            
-        # Intentar detectar si es numérico (Escala 1-10)
-        numericos = pd.to_numeric(datos, errors='coerce').dropna()
-        
-        with columnas_web[i % 5]:
-            if not numericos.empty and numericos.max() <= 10:
-                # CÁLCULO NPS: (Promotores - Detractores) / Total * 100
-                total = len(numericos)
-                prom = len(numericos[numericos >= 9])
-                det = len(numericos[numericos <= 6])
-                nps = ((prom - det) / total) * 100
-                st.metric(label=f"{col} (NPS)", value=f"{int(nps)}")
-            else:
-                # CÁLCULO CUMPLIMIENTO (% SI)
-                texto = datos.str.strip().str.upper()
-                si = len(texto[texto.isin(['SI', 'SÍ'])])
-                total_resp = len(texto[texto.isin(['SI', 'SÍ', 'NO'])])
-                if total_resp > 0:
-                    perc = (si / total_resp) * 100
-                    st.metric(label=f"{col} (% SÍ)", value=f"{int(perc)}%")
+# --- FUNCIONES DE CÁLCULO DE INDICADORES ---
+def calcular_nps(serie):
+    valores = pd.to_numeric(serie, errors='coerce').dropna()
+    if valores.empty: return None
+    total = len(valores)
+    promotores = len(valores[valores >= 9])
+    detractores = len(valores[valores <= 6])
+    return round(((promotores - detractores) / total) * 100, 1)
+
+def calcular_cumplimiento(serie):
+    valores = serie.str.strip().str.upper().dropna()
+    validos = valores[valores.isin(["SI", "SÍ", "NO"])]
+    if validos.empty: return None
+    total = len(validos)
+    positivos = len(validos[validos.isin(["SI", "SÍ"])])
+    return round((positivos / total) * 100, 1)
 
 # --- EJECUCIÓN ---
 try:
     df = load_data(HOJAS[seleccion])
     
-    # Si es Enc Roar, mostramos los indicadores arriba
+    # Procesamiento especial para Enc Roar (Columnas Q)
     if seleccion == "Enc Roar":
-        calcular_metricas_q(df)
+        st.subheader("📈 Métricas de Evaluación (Preguntas Q)")
+        cols_q = [c for c in df.columns if str(c).upper().startswith('Q')]
+        
+        if cols_q:
+            # Mostramos hasta 5 métricas por fila
+            metrica_cols = st.columns(min(len(cols_q), 5))
+            for idx, col_name in enumerate(cols_q):
+                with metrica_cols[idx % 5]:
+                    # Intentamos detectar si es NPS (escala numérica) o SI/NO
+                    es_numerico = pd.to_numeric(df[col_name], errors='coerce').dropna()
+                    
+                    if not es_numerico.empty and es_numerico.max() <= 10:
+                        valor_nps = calcular_nps(df[col_name])
+                        st.metric(label=f"{col_name} (NPS)", value=valor_nps)
+                    else:
+                        valor_perc = calcular_cumplimiento(df[col_name])
+                        if valor_perc is not None:
+                            st.metric(label=f"{col_name} (% SÍ)", value=f"{valor_perc}%")
         st.divider()
 
     st.subheader(f"Datos: {seleccion}")
@@ -78,4 +74,4 @@ try:
 
 except Exception as e:
     st.error(f"Error al cargar datos: {e}")
-    st.info("Revisa que el enlace de publicación en Google Sheets siga activo.")
+    st.info("Asegúrate de que el documento esté 'Publicado en la Web' como CSV y los GIDs sean correctos.")
