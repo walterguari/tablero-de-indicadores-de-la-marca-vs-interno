@@ -16,7 +16,6 @@ def load_data(url):
         df = pd.read_csv(csv_url)
         df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
         
-        # Nueva columna para categorizar el feedback
         def categorizar_nps(val):
             val = pd.to_numeric(val, errors='coerce')
             if val >= 9: return "Promotor"
@@ -52,7 +51,7 @@ def crear_gauge_moderno(valor, titulo):
     fig = go.Figure(go.Indicator(
         mode = "gauge+number",
         value = valor,
-        title = {'text': f"<b>{titulo}</b>", 'font': {'size': 24, 'color': '#333'}},
+        title = {'text': f"<b>{titulo}</b>", 'font': {'size': 22, 'color': '#333'}},
         number = {'suffix': "%", 'font': {'size': 45}},
         gauge = {
             'axis': {'range': [0, 100], 'visible': False},
@@ -61,26 +60,37 @@ def crear_gauge_moderno(valor, titulo):
             'threshold': {'line': {'color': "black", 'width': 3}, 'thickness': 0.8, 'value': 94}
         }
     ))
-    fig.update_layout(height=300, margin=dict(l=30, r=30, t=50, b=0), paper_bgcolor='rgba(0,0,0,0)')
+    fig.update_layout(height=280, margin=dict(l=30, r=30, t=50, b=0), paper_bgcolor='rgba(0,0,0,0)')
+    return fig
+
+def crear_grafico_torta(df, columna, titulo):
+    conteo = df[columna].value_counts().reset_index()
+    conteo.columns = [columna, 'Cantidad']
+    fig = px.pie(conteo, values='Cantidad', names=columna, title=titulo, hole=0.4, 
+                 color_discrete_sequence=px.colors.qualitative.Pastel)
+    fig.update_traces(textinfo='percent+label+value')
     return fig
 
 # --- LÓGICA PRINCIPAL ---
 try:
     df = load_data(sheet_url)
     if not df.empty:
-        # Sidebar
+        # Sidebar con todos los filtros recuperados
         st.sidebar.header("Filtros Globales")
         df['Anio'] = df["Fecha de ultimo contacto"].dt.year
         df['Mes_Num'] = df["Fecha de ultimo contacto"].dt.month
         
         anio_sel = st.sidebar.selectbox("Año", sorted(df['Anio'].dropna().unique().astype(int), reverse=True))
-        meses_n = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6:"Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
+        meses_n = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6: "Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
         meses_disp = sorted(df[df['Anio'] == anio_sel]['Mes_Num'].unique())
         mes_sel = st.sidebar.selectbox("Mes", [meses_n[m] for m in meses_disp])
         mes_num = [k for k, v in meses_n.items() if v == mes_sel][0]
-        marcas = st.sidebar.multiselect("MARCA", df["MARCA"].unique(), df["MARCA"].unique())
 
-        df_base = df[(df["Anio"] == anio_sel) & (df["Mes_Num"] == mes_num) & (df["MARCA"].isin(marcas))]
+        marcas = st.sidebar.multiselect("MARCA", df["MARCA"].unique(), df["MARCA"].unique())
+        canales = st.sidebar.multiselect("Canal de Venta", df["Canal de Venta"].unique(), df["Canal de Venta"].unique())
+
+        df_base = df[(df["Anio"] == anio_sel) & (df["Mes_Num"] == mes_num) & 
+                     (df["MARCA"].isin(marcas)) & (df["Canal de Venta"].isin(canales))]
 
         st.title("📊 Gestión de Calidad - Grupo Cenoa")
         tab_global, tab_vendedores = st.tabs(["🏠 Monitor Global", "👤 Rendimiento por Vendedor"])
@@ -91,36 +101,48 @@ try:
 
             # --- RELOJES Y BOTONES ---
             c1, c2, c3 = st.columns([2, 2, 1])
-            
             with c1:
                 st.plotly_chart(crear_gauge_moderno(nps_q1, "Q1 - SATISFACCIÓN"), use_container_width=True)
-                st.write("🔍 **Filtrar comentarios por tipo:**")
-                
-                # Estado del filtro en session_state
+                st.write("🔍 **Filtrar comentarios por:**")
                 if 'filtro_nps' not in st.session_state: st.session_state.filtro_nps = "Todos"
-                
                 col_btn1, col_btn2, col_btn3 = st.columns(3)
-                if col_btn1.button(f"🟢 {p_q1}\nPromotores"): st.session_state.filtro_nps = "Promotor"
-                if col_btn2.button(f"🟡 {n_q1}\nNeutros"): st.session_state.filtro_nps = "Neutro"
-                if col_btn3.button(f"🔴 {d_q1}\nDetractores"): st.session_state.filtro_nps = "Detractor"
-                
+                if col_btn1.button(f"🟢 {p_q1}\nProm"): st.session_state.filtro_nps = "Promotor"
+                if col_btn2.button(f"🟡 {n_q1}\nNeu"): st.session_state.filtro_nps = "Neutro"
+                if col_btn3.button(f"🔴 {d_q1}\nDet"): st.session_state.filtro_nps = "Detractor"
             with c2:
                 st.plotly_chart(crear_gauge_moderno(nps_q2, "Q2 - RECOMENDACIÓN"), use_container_width=True)
-            
             with c3:
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 st.metric("Total Encuestas", t_q1)
                 if st.button("🔄 Ver Todos"): st.session_state.filtro_nps = "Todos"
 
+            # --- SUB-TABS RECUPERADOS ---
+            st.markdown("---")
+            stabs = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
+            with stabs[0]:
+                v1, v2, v3 = st.columns(3)
+                v1.metric("Q4 - Cortesía", f"{calcular_nps_detallado(df_base['Q4 - Cortesía y amabilidad'])[0]:.1f}%")
+                v2.metric("Q5 - Competencia", f"{calcular_nps_detallado(df_base['Q5 - Competencia Vendedor'])[0]:.1f}%")
+                v3.metric("Q8 - Info Pre-entrega", f"{calcular_nps_detallado(df_base['Q8 - Satisfacción información entre compra y entrega'])[0]:.1f}%")
+            with stabs[1]:
+                ct1, ct2 = st.columns(2)
+                ct1.metric("Q7 - NPS Test Drive", f"{calcular_nps_detallado(df_base['Q7 - Satisfacción Test Drive'])[0]:.1f}%")
+                ct2.plotly_chart(crear_grafico_torta(df_base, 'Q6 - Ofrecimiento Test Drive', 'Q6 - Ofrecimiento TD'), use_container_width=True)
+            with stabs[2]:
+                cf1, cf2 = st.columns(2)
+                cf1.metric("Q10 - NPS Financiación", f"{calcular_nps_detallado(df_base['Q10 - Satisfacción Financiación utilizada'])[0]:.1f}%")
+                cf2.plotly_chart(crear_grafico_torta(df_base, 'Q9 - Financiación utilizada', 'Q9 - Mix Financiación'), use_container_width=True)
+            with stabs[3]:
+                ce1, ce2 = st.columns(2)
+                ce1.metric("Q11 - Momento Entrega", f"{calcular_nps_detallado(df_base['Q11 - Satisfacción Momento de la entrega'])[0]:.1f}%")
+                ce2.metric("Q13 - Entrega General", f"{calcular_nps_detallado(df_base['Q13 - Satisfacción Entrega General'])[0]:.1f}%")
+
             # --- TABLA DE VERBALIZACIONES ---
             st.markdown("---")
-            st.subheader(f"💬 Comentarios (Q3) - Mostrando: {st.session_state.filtro_nps}")
-            
+            st.subheader(f"💬 Verbalizaciones (Q3) - Mostrando: {st.session_state.filtro_nps}")
             df_v = df_base[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Vendedor", "Categoria_NPS"]].copy()
-            
             if st.session_state.filtro_nps != "Todos":
                 df_v = df_v[df_v["Categoria_NPS"] == st.session_state.filtro_nps]
-            
             df_v["Fecha de ultimo contacto"] = df_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
             st.dataframe(df_v.drop(columns=['Categoria_NPS']).sort_values("Fecha de ultimo contacto", ascending=False), 
                          use_container_width=True, hide_index=True)
@@ -129,9 +151,8 @@ try:
             st.header("Ranking y Objetivos Stellantis")
             resumen = []
             for vend, data in df_base.groupby("Vendedor"):
-                n_v, p_v, ne_v, d_v, t_v = calcular_nps_detallado(data["Q1 - Satisfacción general"])
-                resumen.append({"Vendedor": vend, "NPS Q1 %": n_v, "Cant.": t_v, "Objetivo": calcular_faltante_94(p_v, d_v, t_v)})
-            
+                nv, pv, nev, dv, tv = calcular_nps_detallado(data["Q1 - Satisfacción general"])
+                resumen.append({"Vendedor": vend, "NPS Q1 %": nv, "Cant.": tv, "Objetivo": calcular_faltante_94(pv, dv, tv)})
             comp = pd.DataFrame(resumen).sort_values("NPS Q1 %", ascending=False)
             st.dataframe(comp.style.map(lambda x: 'color: red; font-weight: bold' if '🚨' in str(x) else 'color: green', subset=['Objetivo']), 
                          use_container_width=True, hide_index=True)
