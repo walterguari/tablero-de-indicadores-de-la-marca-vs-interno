@@ -1,45 +1,36 @@
 import streamlit as st
+from library.st_gsheets_connection import GSheetsConnection
 import pandas as pd
 
-# CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Tablero de Indicadores", layout="wide")
-st.title("📊 Tablero de Indicadores: Marca vs Interno")
 
-# 1. ENLACE DE PUBLICACIÓN (ID del documento publicado como CSV)
-# Usamos el ID que aparece en tu ventana de 'Publicar en la Web'
-ID_PUB = "2PACX-1vQBTifZuxjKR35zQencq2bgSWLVMSVir_OkQF1jwTumpJBwSwmxB865sllzXre5b1RFkyn1pVQhE2lf"
+st.title("📊 Datos desde Google Sheets - Enc Roar")
 
-# 2. DICCIONARIO DE HOJAS (Comas corregidas)
-HOJAS = {
-    "Enc. Interna CONTAC": "1131519764",
-    "TASA DE EMAIL Y RESP": "877908159",
-    "Enc Roar": "567460007",
-    "VN ROAR": "0"
-}
+# URL de tu Google Sheet
+sheet_url = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=567460007"
 
-# Selector en la barra lateral
-st.sidebar.header("Configuración")
-seleccion = st.sidebar.selectbox("Selecciona la hoja a visualizar", list(HOJAS.keys()))
-
-@st.cache_data(ttl=600)
-def load_data(gid):
-    # Construimos la URL de exportación directa usando el ID de publicación
-    url = f"https://docs.google.com/spreadsheets/d/e/{ID_PUB}/pub?output=csv&gid={gid}"
-    # on_bad_lines='skip' evita errores si hay filas con formatos extraños
-    return pd.read_csv(url, on_bad_lines='skip', dtype=str)
+# Función para cargar los datos
+def load_data(url):
+    # Convertimos la URL de edición en una URL de exportación CSV para la hoja específica
+    # El gid 567460007 corresponde a "Enc Roar"
+    csv_url = url.replace("/edit#gid=", "/export?format=csv&gid=")
+    return pd.read_csv(csv_url)
 
 try:
-    df = load_data(HOJAS[seleccion])
-    st.subheader(f"Hoja: {seleccion}")
+    df = load_data(sheet_url)
     
-    # Buscador rápido
-    busqueda = st.text_input(f"Buscar en {seleccion}...")
-    if busqueda:
-        mask = df.apply(lambda row: row.astype(str).str.contains(busqueda, case=False).any(), axis=1)
-        df = df[mask]
+    # Mostrar un resumen de los datos
+    st.success("¡Datos cargados correctamente desde la hoja Enc Roar!")
     
-    st.dataframe(df, use_container_width=True)
+    # Filtro rápido para visualizar
+    if st.checkbox("Mostrar tabla de datos crudos"):
+        st.dataframe(df)
+
+    # Ejemplo de visualización de métricas si existen columnas de indicadores
+    # Aquí puedes personalizar según las columnas reales de tu hoja "Enc Roar"
+    st.subheader("Resumen de Indicadores")
+    st.write(f"Total de registros encontrados: {len(df)}")
 
 except Exception as e:
-    st.error(f"Error al cargar la hoja {seleccion}")
-    st.info("Asegúrate de que el documento esté 'Publicado en la Web' y los GIDs sean correctos.")
+    st.error(f"No se pudo conectar con la hoja. Asegúrate de que el archivo sea 'Público' (Cualquier persona con el enlace puede leer).")
+    st.info("Error técnico: " + str(e))
