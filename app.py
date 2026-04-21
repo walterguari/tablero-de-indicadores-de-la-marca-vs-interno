@@ -77,23 +77,23 @@ def crear_grafico_torta(df, columna, titulo):
 try:
     df = load_data(sheet_url)
     if not df.empty:
-        # --- SIDEBAR CON MULTISELECCIÓN DE MESES ---
+        # --- SIDEBAR (CON CORRECCIÓN DE PARÁMETRO 'options') ---
         st.sidebar.header("Filtros Globales")
         df['Anio'] = df["Fecha de ultimo contacto"].dt.year
         df['Mes_Num'] = df["Fecha de ultimo contacto"].dt.month
         
-        anio_sel = st.sidebar.selectbox("Año", sorted(df['Anio'].dropna().unique().astype(int), reverse=True))
+        anio_sel = st.sidebar.selectbox("Año", options=sorted(df['Anio'].dropna().unique().astype(int), reverse=True))
         
         meses_n = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6: "Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
         meses_disp_nums = sorted(df[df['Anio'] == anio_sel]['Mes_Num'].unique())
         meses_disp_nombres = [meses_n[m] for m in meses_disp_nums]
         
-        # Filtro de meses acumulados
-        meses_sel_nombres = st.sidebar.multiselect("Seleccione Mes(es)", opciones=meses_disp_nombres, default=meses_disp_nombres[-1:])
+        # Filtro multi-mes (Corregido 'options')
+        meses_sel_nombres = st.sidebar.multiselect("Seleccione Mes(es)", options=meses_disp_nombres, default=meses_disp_nombres[-1:])
         meses_sel_nums = [k for k, v in meses_n.items() if v in meses_sel_nombres]
 
-        marcas = st.sidebar.multiselect("MARCA", df["MARCA"].unique(), df["MARCA"].unique())
-        canales = st.sidebar.multiselect("Canal de Venta", df["Canal de Venta"].unique(), df["Canal de Venta"].unique())
+        marcas = st.sidebar.multiselect("MARCA", options=df["MARCA"].unique(), default=df["MARCA"].unique())
+        canales = st.sidebar.multiselect("Canal de Venta", options=df["Canal de Venta"].unique(), default=df["Canal de Venta"].unique())
 
         df_base = df[(df["Anio"] == anio_sel) & (df["Mes_Num"].isin(meses_sel_nums)) & 
                      (df["MARCA"].isin(marcas)) & (df["Canal de Venta"].isin(canales))]
@@ -101,46 +101,43 @@ try:
         st.title("📊 Gestión de Calidad - Grupo Cenoa")
         tab_global, tab_vendedores = st.tabs(["🏠 Monitor Global", "👤 Rendimiento por Vendedor"])
 
-        # Manejo de estado para el filtrado dinámico de comentarios
         if 'filtro_col' not in st.session_state: st.session_state.filtro_col = "Cat_Q1"
         if 'filtro_val' not in st.session_state: st.session_state.filtro_val = "Todos"
 
         with tab_global:
-            st.header(f"Resultados Acumulados - {', '.join(meses_sel_nombres)}")
+            st.header(f"Resultados de: {', '.join(meses_sel_nombres)}")
             nps_q1, p_q1, n_q1, d_q1, t_q1 = calcular_nps_detallado(df_base['Q1 - Satisfacción general'])
             nps_q2, p_q2, n_q2, d_q2, _ = calcular_nps_detallado(df_base['Q2 - Recomendación - Concesionario'])
 
-            # --- SECCIÓN DE RELOJES CON DOBLE BOTONERA ---
-            c_gauge1, c_gauge2, c_metric = st.columns([2.2, 2.2, 0.6])
+            # --- GAUGE Y BOTONES ---
+            c_q1, c_q2, c_tot = st.columns([2.2, 2.2, 0.6])
             
-            with c_gauge1:
+            with c_q1:
                 st.plotly_chart(crear_gauge_moderno(nps_q1, "Q1 - SATISFACCIÓN"), use_container_width=True)
-                st.write("**Filtrar comentarios Q1:**")
-                cb1, cb2, cb3 = st.columns(3)
-                if cb1.button(f"🟢 {p_q1}\nProm", key="q1p"): 
+                col_b1, col_b2, col_b3 = st.columns(3)
+                if col_b1.button(f"🟢 {p_q1}\nProm", key="q1_p"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1", "Promotor"
-                if cb2.button(f"🟡 {n_q1}\nNeu", key="q1n"): 
+                if col_b2.button(f"🟡 {n_q1}\nNeu", key="q1_n"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1", "Neutro"
-                if cb3.button(f"🔴 {d_q1}\nDet", key="q1d"): 
+                if col_b3.button(f"🔴 {d_q1}\nDet", key="q1_d"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1", "Detractor"
 
-            with c_gauge2:
+            with c_q2:
                 st.plotly_chart(crear_gauge_moderno(nps_q2, "Q2 - RECOMENDACIÓN"), use_container_width=True)
-                st.write("**Filtrar comentarios Q2:**")
-                cb4, cb5, cb6 = st.columns(3)
-                if cb4.button(f"🟢 {p_q2}\nProm", key="q2p"): 
+                col_b4, col_b5, col_b6 = st.columns(3)
+                if col_b4.button(f"🟢 {p_q2}\nProm", key="q2_p"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2", "Promotor"
-                if cb5.button(f"🟡 {n_q2}\nNeu", key="q2n"): 
+                if col_b5.button(f"🟡 {n_q2}\nNeu", key="q2_n"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2", "Neutro"
-                if cb6.button(f"🔴 {d_q2}\nDet", key="q2d"): 
+                if col_b6.button(f"🔴 {d_q2}\nDet", key="q2_d"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2", "Detractor"
 
-            with c_metric:
+            with c_tot:
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 st.metric("Muestra", t_q1)
                 if st.button("🔄 Ver\nTodos"): st.session_state.filtro_val = "Todos"
 
-            # --- SECCIÓN DE SUB-TABS (VENTAS, TEST DRIVE, FINANZAS, ENTREGA) ---
+            # --- SUB-TABS CALIDAD ---
             st.markdown("---")
             stabs = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
             with stabs[0]:
@@ -163,7 +160,7 @@ try:
 
             # --- TABLA DE VERBALIZACIONES ---
             st.markdown("---")
-            label_f = "Todos los comentarios" if st.session_state.filtro_val == "Todos" else f"Comentarios: {st.session_state.filtro_val} en {st.session_state.filtro_col.replace('Cat_', '')}"
+            label_f = "Todos los comentarios" if st.session_state.filtro_val == "Todos" else f"Comentarios: {st.session_state.filtro_val} ({st.session_state.filtro_col.replace('Cat_', '')})"
             st.subheader(f"💬 Verbalizaciones (Q3) - {label_f}")
             
             df_v = df_base[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Vendedor", "Cat_Q1", "Cat_Q2"]].copy()
@@ -185,4 +182,4 @@ try:
                          use_container_width=True, hide_index=True)
 
 except Exception as e:
-    st.error(f"Error crítico: {e}")
+    st.error(f"Error crítico en la aplicación: {e}")
