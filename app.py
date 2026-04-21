@@ -76,13 +76,16 @@ def crear_grafico_torta(df, columna, titulo):
 try:
     df = load_data(sheet_url)
     if not df.empty:
-        # --- SIDEBAR ---
+        # --- SIDEBAR (FILTROS DINÁMICOS) ---
         st.sidebar.header("Filtros Globales")
         df['Anio'] = df["Fecha de ultimo contacto"].dt.year
         df['Mes_Num'] = df["Fecha de ultimo contacto"].dt.month
         
-        anio_sel = st.sidebar.selectbox("Año", options=sorted(df['Anio'].dropna().unique().astype(int), reverse=True))
+        # 1. Filtro de Año
+        anios_disponibles = sorted(df['Anio'].dropna().unique().astype(int), reverse=True)
+        anio_sel = st.sidebar.selectbox("Año", options=anios_disponibles)
         
+        # 2. Filtro de Meses (Depende del Año)
         meses_n = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6: "Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
         meses_disp_nums = sorted(df[df['Anio'] == anio_sel]['Mes_Num'].unique())
         meses_disp_nombres = [meses_n[m] for m in meses_disp_nums]
@@ -90,11 +93,19 @@ try:
         meses_sel_nombres = st.sidebar.multiselect("Seleccione Mes(es)", options=meses_disp_nombres, default=meses_disp_nombres[-1:])
         meses_sel_nums = [k for k, v in meses_n.items() if v in meses_sel_nombres]
 
-        marcas = st.sidebar.multiselect("MARCA", options=df["MARCA"].unique(), default=df["MARCA"].unique())
-        canales = st.sidebar.multiselect("Canal de Venta", options=df["Canal de Venta"].unique(), default=df["Canal de Venta"].unique())
+        # --- DATA FILTRADA POR TIEMPO PARA ACTUALIZAR LOS SIGUIENTES FILTROS ---
+        df_time = df[(df["Anio"] == anio_sel) & (df["Mes_Num"].isin(meses_sel_nums))]
 
-        df_base = df[(df["Anio"] == anio_sel) & (df["Mes_Num"].isin(meses_sel_nums)) & 
-                     (df["MARCA"].isin(marcas)) & (df["Canal de Venta"].isin(canales))]
+        # 3. Filtro de MARCA (Depende de Año y Mes)
+        marcas_disponibles = sorted(df_time["MARCA"].unique())
+        marcas = st.sidebar.multiselect("MARCA", options=marcas_disponibles, default=marcas_disponibles)
+
+        # 4. Filtro de CANAL (Depende de Año, Mes y Marca)
+        canales_disponibles = sorted(df_time[df_time["MARCA"].isin(marcas)]["Canal de Venta"].unique())
+        canales = st.sidebar.multiselect("Canal de Venta", options=canales_disponibles, default=canales_disponibles)
+
+        # --- DATA BASE FINAL ---
+        df_base = df_time[(df_time["MARCA"].isin(marcas)) & (df_time["Canal de Venta"].isin(canales))]
 
         st.title("📊 Gestión de Calidad - Grupo Cenoa")
         tab_global, tab_vendedores = st.tabs(["🏠 Monitor Global", "👤 Rendimiento por Vendedor"])
@@ -157,39 +168,27 @@ try:
             df_v = df_base[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Vendedor", "Cat_Q1", "Cat_Q2"]].copy()
             if st.session_state.filtro_val != "Todos":
                 df_v = df_v[df_v[st.session_state.filtro_col] == st.session_state.filtro_val]
+            
             df_v["Fecha de ultimo contacto"] = df_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
             st.dataframe(df_v[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Vendedor"]].sort_values("Fecha de ultimo contacto", ascending=False), use_container_width=True, hide_index=True)
 
         with tab_vendedores:
-            st.header("Ranking y Objetivos por Asesor (Métrica Q2)")
+            st.header("Ranking y Objetivos por Asesor (Q2)")
             if not df_base.empty:
                 resumen = []
                 for vend, data in df_base.groupby("Vendedor"):
-                    # CAMBIO A Q2 AQUÍ:
                     nv, pv, nev, dv, tv = calcular_nps_detallado(data["Q2 - Recomendación - Concesionario"])
                     resumen.append({"Vendedor": vend, "NPS Q2 %": nv, "Cant.": tv, "Acción": calcular_faltante_94(pv, dv, tv)})
-                
                 comp = pd.DataFrame(resumen).sort_values("NPS Q2 %", ascending=False)
                 
-                # Definimos el color según el rango para Q2
                 def get_bar_color(val):
                     if val >= 94: return '#28a745'
                     if val >= 90: return '#ffc107'
                     return '#dc3545'
 
                 comp['Bar_Color'] = comp['NPS Q2 %'].apply(get_bar_color)
-
-                fig_rank = px.bar(
-                    comp, 
-                    x="Vendedor", 
-                    y="NPS Q2 %", 
-                    text="NPS Q2 %", 
-                    range_y=[0, 110],
-                    color="Bar_Color",
-                    color_discrete_map={'#28a745': '#28a745', '#ffc107': '#ffc107', '#dc3545': '#dc3545'},
-                    labels={"NPS Q2 %": "NPS Recomendación (%)"}
-                )
-                
+                fig_rank = px.bar(comp, x="Vendedor", y="NPS Q2 %", text="NPS Q2 %", range_y=[0, 110], color="Bar_Color",
+                                  color_discrete_map={'#28a745': '#28a745', '#ffc107': '#ffc107', '#dc3545': '#dc3545'})
                 fig_rank.add_hline(y=94, line_dash="dash", line_color="black", annotation_text="Objetivo 94%")
                 fig_rank.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
                 fig_rank.update_layout(showlegend=False)
