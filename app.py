@@ -21,6 +21,23 @@ def calcular_nps(serie):
     if total == 0: return 0
     return ((promotores - detractores) / total) * 100
 
+# Función para definir el color según el rango Stellantis
+def obtener_color_rango(valor):
+    if valor >= 94: return '#28a745' # Verde
+    if valor >= 90: return '#ffc107' # Amarillo/Naranja
+    return '#dc3545' # Rojo
+
+# Función para crear una tarjeta de KPI con color de fondo
+def kpi_card(titulo, valor):
+    color = obtener_color_rango(valor)
+    texto_color = "black" if color == '#ffc107' else "white"
+    st.markdown(f"""
+        <div style="background-color:{color}; padding:20px; border-radius:10px; text-align:center;">
+            <h3 style="color:{texto_color}; margin:0;">{titulo}</h3>
+            <h1 style="color:{texto_color}; margin:0;">{valor:.1f}%</h1>
+        </div>
+        """, unsafe_allow_html=True)
+
 def crear_grafico_torta(df, columna, titulo):
     conteo = df[columna].value_counts().reset_index()
     conteo.columns = [columna, 'Cantidad']
@@ -31,7 +48,7 @@ def crear_grafico_torta(df, columna, titulo):
 try:
     df = load_data(sheet_url)
     
-    # --- BARRA LATERAL (FILTROS DE PERÍODO Y MARCA) ---
+    # --- BARRA LATERAL ---
     st.sidebar.header("Filtros Globales")
     df['Anio'] = df["Fecha de ultimo contacto"].dt.year
     df['Mes_Num'] = df["Fecha de ultimo contacto"].dt.month
@@ -50,7 +67,6 @@ try:
     marca = st.sidebar.multiselect("MARCA", options=df["MARCA"].unique(), default=df["MARCA"].unique())
     canal = st.sidebar.multiselect("Canal de Venta", options=df["Canal de Venta"].unique(), default=df["Canal de Venta"].unique())
 
-    # Data filtrada base
     df_base = df[
         (df["Anio"] == anio_sel) & 
         (df["Mes_Num"] == mes_sel_num) &
@@ -65,12 +81,17 @@ try:
     # --- PESTAÑA 1: MONITOR GLOBAL ---
     with pestana_principal:
         st.header(f"Resultados Globales - {mes_sel_nombre} {anio_sel}")
-        k1, k2, k3 = st.columns(3)
-        k1.metric("Q1 - NPS Satisfacción Gral.", f"{calcular_nps(df_base['Q1 - Satisfacción general']):.1f}%")
-        k2.metric("Q2 - NPS Recomendación", f"{calcular_nps(df_base['Q2 - Recomendación - Concesionario']):.1f}%")
-        k3.metric("Muestra Total", len(df_base))
+        
+        # Indicadores con formato de color
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            kpi_card("Q1 - NPS Satisfacción Gral.", calcular_nps(df_base['Q1 - Satisfacción general']))
+        with col2:
+            kpi_card("Q2 - NPS Recomendación", calcular_nps(df_base['Q2 - Recomendación - Concesionario']))
+        with col3:
+            st.metric("Muestra Total", len(df_base))
 
-        st.markdown("---")
+        st.markdown("<br>", unsafe_allow_html=True)
         sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
         
         with sub_tab1:
@@ -103,20 +124,14 @@ try:
             vendedor_count.columns = ["Vendedor", "Cantidad"]
             
             comparativa = pd.merge(vendedor_nps, vendedor_count, on="Vendedor")
-
-            def asignar_color(valor):
-                if valor >= 94: return 'green'
-                elif valor >= 90: return 'orange'
-                else: return 'red'
-
-            comparativa['Color'] = comparativa['NPS Q1 %'].apply(asignar_color)
+            comparativa['Color_Hex'] = comparativa['NPS Q1 %'].apply(obtener_color_rango)
 
             fig_comp = px.bar(
                 comparativa.sort_values("NPS Q1 %", ascending=False),
                 x="Vendedor", y="NPS Q1 %", text="NPS Q1 %",
                 title="Ranking de NPS por Vendedor (Semáforo de Calidad)",
-                color='Color',
-                color_discrete_map={'green': '#28a745', 'orange': '#ffc107', 'red': '#dc3545'},
+                color='Color_Hex',
+                color_discrete_map={'#28a745': '#28a745', '#ffc107': '#ffc107', '#dc3545': '#dc3545'},
                 labels={"NPS Q1 %": "NPS (%)"}
             )
             
@@ -125,7 +140,9 @@ try:
             st.plotly_chart(fig_comp, use_container_width=True)
 
             st.subheader("Tabla Detallada de Rendimiento")
-            st.dataframe(comparativa.sort_values("NPS Q1 %", ascending=False), use_container_width=True, hide_index=True)
+            # Mostramos la tabla sin la columna de color
+            st.dataframe(comparativa[["Vendedor", "NPS Q1 %", "Cantidad"]].sort_values("NPS Q1 %", ascending=False), 
+                         use_container_width=True, hide_index=True)
         else:
             st.warning("No hay datos para los filtros seleccionados.")
 
