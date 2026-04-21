@@ -111,7 +111,7 @@ try:
             color = 'red' if '🚨' in str(val) else 'green'
             return f'color: {color}; font-weight: bold'
 
-        st.dataframe(comp.style.applymap(color_rojo_fallo, subset=['Acción/Objetivo']), 
+        st.dataframe(comp.style.map(color_rojo_fallo, subset=['Acción/Objetivo']), 
                      use_container_width=True, hide_index=True)
 
 except Exception as e:
