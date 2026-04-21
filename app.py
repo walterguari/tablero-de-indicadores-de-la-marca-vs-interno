@@ -89,7 +89,6 @@ try:
         with c3: st.metric("Encuestas Totales", total_mue)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        # AQUÍ ESTÁN LAS PESTAÑAS QUE FALTABAN
         sub1, sub2, sub3, sub4 = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
         
         with sub1:
@@ -97,21 +96,28 @@ try:
             v1.metric("Q4 - Cortesía", f"{calcular_nps_detallado(df_base['Q4 - Cortesía y amabilidad'])[0]:.1f}%")
             v2.metric("Q5 - Competencia", f"{calcular_nps_detallado(df_base['Q5 - Competencia Vendedor'])[0]:.1f}%")
             v3.metric("Q8 - Info Pre-entrega", f"{calcular_nps_detallado(df_base['Q8 - Satisfacción información entre compra y entrega'])[0]:.1f}%")
-        
         with sub2:
             ct1, ct2 = st.columns(2)
             with ct1: st.plotly_chart(crear_grafico_torta(df_base, "Q6 - Ofrecimiento Test Drive", "Q6 - Ofrecimiento TD"), use_container_width=True)
             with ct2: st.metric("Q7 - NPS Test Drive", f"{calcular_nps_detallado(df_base['Q7 - Satisfacción Test Drive'])[0]:.1f}%")
-        
         with sub3:
             cf1, cf2 = st.columns(2)
             with cf1: st.plotly_chart(crear_grafico_torta(df_base, "Q9 - Financiación utilizada", "Q9 - Tipo de Pago"), use_container_width=True)
             with cf2: st.metric("Q10 - NPS Financiación", f"{calcular_nps_detallado(df_base['Q10 - Satisfacción Financiación utilizada'])[0]:.1f}%")
-        
         with sub4:
             ce1, ce2 = st.columns(2)
             ce1.metric("Q11 - Momento Entrega", f"{calcular_nps_detallado(df_base['Q11 - Satisfacción Momento de la entrega'])[0]:.1f}%")
             ce2.metric("Q13 - Entrega General", f"{calcular_nps_detallado(df_base['Q13 - Satisfacción Entrega General'])[0]:.1f}%")
+
+        # --- AQUÍ RESTAURAMOS LA TABLA DE VERBALIZACIONES ---
+        st.markdown("---")
+        st.subheader("💬 Comentarios y Verbalizaciones (Q3)")
+        if not df_base.empty:
+            df_verbal = df_base[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Vendedor"]].copy()
+            df_verbal["Fecha de ultimo contacto"] = df_verbal["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
+            st.dataframe(df_verbal.sort_values("Fecha de ultimo contacto", ascending=False), use_container_width=True, hide_index=True)
+        else:
+            st.info("No hay comentarios para mostrar en este período.")
 
     with p2:
         st.header("Análisis de Objetivos Stellantis (Mínimo 94%)")
@@ -137,7 +143,7 @@ try:
             st.dataframe(comp[["Vendedor", "NPS Q1 %", "Cantidad", "Acción/Objetivo"]].style.map(color_rojo_fallo, subset=['Acción/Objetivo']), 
                          use_container_width=True, hide_index=True)
         else:
-            st.warning("No hay datos para los filtros seleccionados.")
+            st.warning("No hay datos para calcular el rendimiento.")
 
 except Exception as e:
     st.error(f"Error: {e}")
