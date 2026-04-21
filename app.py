@@ -18,6 +18,7 @@ def calcular_nps(serie):
     promotores = (serie >= 9).sum()
     detractores = (serie <= 6).sum()
     total = len(serie)
+    if total == 0: return 0
     return ((promotores - detractores) / total) * 100
 
 def crear_grafico_torta(df, columna, titulo):
@@ -49,7 +50,7 @@ try:
     marca = st.sidebar.multiselect("MARCA", options=df["MARCA"].unique(), default=df["MARCA"].unique())
     canal = st.sidebar.multiselect("Canal de Venta", options=df["Canal de Venta"].unique(), default=df["Canal de Venta"].unique())
 
-    # Data filtrada base (Sin filtro de vendedor)
+    # Data filtrada base
     df_base = df[
         (df["Anio"] == anio_sel) & 
         (df["Mes_Num"] == mes_sel_num) &
@@ -90,49 +91,43 @@ try:
             ce1.metric("Q11 - Momento Entrega", f"{calcular_nps(df_base['Q11 - Satisfacción Momento de la entrega']):.1f}%")
             ce2.metric("Q13 - Entrega General", f"{calcular_nps(df_base['Q13 - Satisfacción Entrega General']):.1f}%")
 
-# --- PESTAÑA 2: RENDIMIENTO POR VENDEDOR ---
+    # --- PESTAÑA 2: RENDIMIENTO POR VENDEDOR ---
     with pestana_vendedores:
         st.header("Análisis Comparativo de Asesores")
         
-        # 1. Cálculo de NPS Q1 por Vendedor
-        vendedor_nps = df_base.groupby("Vendedor").apply(lambda x: calcular_nps(x["Q1 - Satisfacción general"])).reset_index()
-        vendedor_nps.columns = ["Vendedor", "NPS Q1 %"]
-        
-        # 2. Conteo de encuestas
-        vendedor_count = df_base["Vendedor"].value_counts().reset_index()
-        vendedor_count.columns = ["Vendedor", "Cantidad"]
-        
-        comparativa = pd.merge(vendedor_nps, vendedor_count, on="Vendedor")
+        if not df_base.empty:
+            vendedor_nps = df_base.groupby("Vendedor").apply(lambda x: calcular_nps(x["Q1 - Satisfacción general"])).reset_index()
+            vendedor_nps.columns = ["Vendedor", "NPS Q1 %"]
+            
+            vendedor_count = df_base["Vendedor"].value_counts().reset_index()
+            vendedor_count.columns = ["Vendedor", "Cantidad"]
+            
+            comparativa = pd.merge(vendedor_nps, vendedor_count, on="Vendedor")
 
-        # 3. Lógica de Colores Manual (Semáforo Stellantis)
-        def asignar_color(valor):
-            if valor >= 94:
-                return 'green'      # Verde: 94 a 100
-            elif valor >= 90:
-                return 'orange'     # Amarillo/Naranja: 90 a 93.9
-            else:
-                return 'red'        # Rojo: 0 a 89.9
+            def asignar_color(valor):
+                if valor >= 94: return 'green'
+                elif valor >= 90: return 'orange'
+                else: return 'red'
 
-        comparativa['Color'] = comparativa['NPS Q1 %'].apply(asignar_color)
+            comparativa['Color'] = comparativa['NPS Q1 %'].apply(asignar_color)
 
-        # 4. Gráfico de barras con colores asignados
-        fig_comp = px.bar(
-            comparativa.sort_values("NPS Q1 %", ascending=False),
-            x="Vendedor", 
-            y="NPS Q1 %",
-            text="NPS Q1 %",
-            title="Ranking de NPS por Vendedor (Semáforo de Calidad)",
-            color='Color',
-            # Mapeamos los nombres de los colores a valores CSS reales
-            color_discrete_map={'green': '#28a745', 'orange': '#ffc107', 'red': '#dc3545'},
-            labels={"NPS Q1 %": "NPS (%)"}
-        )
-        
-        fig_comp.update_layout(yaxis_range=[0, 110], showlegend=False)
-        fig_comp.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-        
-        st.plotly_chart(fig_comp, use_container_width=True)
+            fig_comp = px.bar(
+                comparativa.sort_values("NPS Q1 %", ascending=False),
+                x="Vendedor", y="NPS Q1 %", text="NPS Q1 %",
+                title="Ranking de NPS por Vendedor (Semáforo de Calidad)",
+                color='Color',
+                color_discrete_map={'green': '#28a745', 'orange': '#ffc107', 'red': '#dc3545'},
+                labels={"NPS Q1 %": "NPS (%)"}
+            )
+            
+            fig_comp.update_layout(yaxis_range=[0, 110], showlegend=False)
+            fig_comp.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+            st.plotly_chart(fig_comp, use_container_width=True)
 
-        # 5. Tabla con formato condicional (opcional pero muy útil)
-        st.subheader("Tabla Detallada de Rendimiento")
-        st.dataframe(comparativa.sort_values("NPS Q1 %", ascending=False), use_container_width=True, hide_index=True)
+            st.subheader("Tabla Detallada de Rendimiento")
+            st.dataframe(comparativa.sort_values("NPS Q1 %", ascending=False), use_container_width=True, hide_index=True)
+        else:
+            st.warning("No hay datos para los filtros seleccionados.")
+
+except Exception as e:
+    st.error(f"Error crítico en la aplicación: {e}")
