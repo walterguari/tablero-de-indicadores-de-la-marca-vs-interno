@@ -23,7 +23,6 @@ def load_data(url):
             if val <= 6: return "Detractor"
             return "Sin Datos"
         
-        # Categorización para filtros cruzados de ambos indicadores principales
         df['Cat_Q1'] = df['Q1 - Satisfacción general'].apply(categorizar_nps)
         df['Cat_Q2'] = df['Q2 - Recomendación - Concesionario'].apply(categorizar_nps)
         return df
@@ -77,7 +76,7 @@ def crear_grafico_torta(df, columna, titulo):
 try:
     df = load_data(sheet_url)
     if not df.empty:
-        # --- SIDEBAR (CON CORRECCIÓN DE PARÁMETRO 'options') ---
+        # --- SIDEBAR ---
         st.sidebar.header("Filtros Globales")
         df['Anio'] = df["Fecha de ultimo contacto"].dt.year
         df['Mes_Num'] = df["Fecha de ultimo contacto"].dt.month
@@ -88,7 +87,6 @@ try:
         meses_disp_nums = sorted(df[df['Anio'] == anio_sel]['Mes_Num'].unique())
         meses_disp_nombres = [meses_n[m] for m in meses_disp_nums]
         
-        # Filtro multi-mes (Corregido 'options')
         meses_sel_nombres = st.sidebar.multiselect("Seleccione Mes(es)", options=meses_disp_nombres, default=meses_disp_nombres[-1:])
         meses_sel_nums = [k for k, v in meses_n.items() if v in meses_sel_nombres]
 
@@ -109,9 +107,7 @@ try:
             nps_q1, p_q1, n_q1, d_q1, t_q1 = calcular_nps_detallado(df_base['Q1 - Satisfacción general'])
             nps_q2, p_q2, n_q2, d_q2, _ = calcular_nps_detallado(df_base['Q2 - Recomendación - Concesionario'])
 
-            # --- GAUGE Y BOTONES ---
             c_q1, c_q2, c_tot = st.columns([2.2, 2.2, 0.6])
-            
             with c_q1:
                 st.plotly_chart(crear_gauge_moderno(nps_q1, "Q1 - SATISFACCIÓN"), use_container_width=True)
                 col_b1, col_b2, col_b3 = st.columns(3)
@@ -121,7 +117,6 @@ try:
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1", "Neutro"
                 if col_b3.button(f"🔴 {d_q1}\nDet", key="q1_d"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1", "Detractor"
-
             with c_q2:
                 st.plotly_chart(crear_gauge_moderno(nps_q2, "Q2 - RECOMENDACIÓN"), use_container_width=True)
                 col_b4, col_b5, col_b6 = st.columns(3)
@@ -131,13 +126,11 @@ try:
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2", "Neutro"
                 if col_b6.button(f"🔴 {d_q2}\nDet", key="q2_d"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2", "Detractor"
-
             with c_tot:
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 st.metric("Muestra", t_q1)
                 if st.button("🔄 Ver\nTodos"): st.session_state.filtro_val = "Todos"
 
-            # --- SUB-TABS CALIDAD ---
             st.markdown("---")
             stabs = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
             with stabs[0]:
@@ -158,28 +151,34 @@ try:
                 ce1.metric("Q11 - Momento Entrega", f"{calcular_nps_detallado(df_base['Q11 - Satisfacción Momento de la entrega'])[0]:.1f}%")
                 ce2.metric("Q13 - Entrega General", f"{calcular_nps_detallado(df_base['Q13 - Satisfacción Entrega General'])[0]:.1f}%")
 
-            # --- TABLA DE VERBALIZACIONES ---
             st.markdown("---")
             label_f = "Todos los comentarios" if st.session_state.filtro_val == "Todos" else f"Comentarios: {st.session_state.filtro_val} ({st.session_state.filtro_col.replace('Cat_', '')})"
             st.subheader(f"💬 Verbalizaciones (Q3) - {label_f}")
-            
             df_v = df_base[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Vendedor", "Cat_Q1", "Cat_Q2"]].copy()
             if st.session_state.filtro_val != "Todos":
                 df_v = df_v[df_v[st.session_state.filtro_col] == st.session_state.filtro_val]
-            
             df_v["Fecha de ultimo contacto"] = df_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
-            st.dataframe(df_v[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Vendedor"]].sort_values("Fecha de ultimo contacto", ascending=False), 
-                         use_container_width=True, hide_index=True)
+            st.dataframe(df_v[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Vendedor"]].sort_values("Fecha de ultimo contacto", ascending=False), use_container_width=True, hide_index=True)
 
         with tab_vendedores:
             st.header("Ranking y Objetivos por Asesor")
-            resumen = []
-            for vend, data in df_base.groupby("Vendedor"):
-                nv, pv, nev, dv, tv = calcular_nps_detallado(data["Q1 - Satisfacción general"])
-                resumen.append({"Vendedor": vend, "NPS Q1 %": nv, "Cant.": tv, "Acción": calcular_faltante_94(pv, dv, tv)})
-            comp = pd.DataFrame(resumen).sort_values("NPS Q1 %", ascending=False)
-            st.dataframe(comp.style.map(lambda x: 'color: red; font-weight: bold' if '🚨' in str(x) else 'color: green', subset=['Acción']), 
-                         use_container_width=True, hide_index=True)
+            if not df_base.empty:
+                resumen = []
+                for vend, data in df_base.groupby("Vendedor"):
+                    nv, pv, nev, dv, tv = calcular_nps_detallado(data["Q1 - Satisfacción general"])
+                    resumen.append({"Vendedor": vend, "NPS Q1 %": nv, "Cant.": tv, "Acción": calcular_faltante_94(pv, dv, tv)})
+                comp = pd.DataFrame(resumen).sort_values("NPS Q1 %", ascending=False)
+                
+                # --- GRÁFICO DE BARRAS RECUPERADO ---
+                fig_rank = px.bar(comp, x="Vendedor", y="NPS Q1 %", text="NPS Q1 %", color="NPS Q1 %", range_y=[0, 110],
+                                  color_continuous_scale=[[0, '#dc3545'], [0.899, '#dc3545'], [0.90, '#ffc107'], [0.939, '#ffc107'], [0.94, '#28a745'], [1, '#28a745']])
+                fig_rank.add_hline(y=94, line_dash="dash", line_color="black", annotation_text="Objetivo 94%")
+                fig_rank.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+                st.plotly_chart(fig_rank, use_container_width=True)
+
+                st.subheader("Detalle de Objetivos")
+                st.dataframe(comp.style.map(lambda x: 'color: red; font-weight: bold' if '🚨' in str(x) else 'color: green', subset=['Acción']), 
+                             use_container_width=True, hide_index=True)
 
 except Exception as e:
-    st.error(f"Error crítico en la aplicación: {e}")
+    st.error(f"Error crítico: {e}")
