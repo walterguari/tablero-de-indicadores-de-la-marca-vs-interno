@@ -69,18 +69,24 @@ try:
         hide_index=True
     )
 
-    # --- GRÁFICO DE VENDEDORES ---
+    # --- GRÁFICO DE VENDEDORES (CORREGIDO) ---
     st.subheader("Performance por Vendedor (Cant. Encuestas)")
+    
+    # Creamos el conteo y reseteamos el índice correctamente
+    conteo_vendedores = df_selection["Vendedor"].value_counts().reset_index()
+    
+    # Ajustamos los nombres de las columnas para que Plotly no se confunda
+    conteo_vendedores.columns = ['Vendedor', 'Encuestas']
+    
     fig_vendedor = px.bar(
-        df_selection["Vendedor"].value_counts().reset_index(),
-        x='index',
-        y='Vendedor',
-        labels={'index': 'Vendedor', 'Vendedor': 'Encuestas'},
+        conteo_vendedores,
+        x='Vendedor',
+        y='Encuestas',
         color='Vendedor',
-        template="plotly_white"
+        text='Encuestas',
+        template="plotly_white",
+        color_discrete_sequence=px.colors.qualitative.Prism
     )
+    
+    fig_vendedor.update_traces(textposition='outside')
     st.plotly_chart(fig_vendedor, use_container_width=True)
-
-except Exception as e:
-    st.error(f"Error al cargar datos o nombres de columnas: {e}")
-    st.info("Asegúrate de que los nombres de las columnas en el Excel coincidan exactamente con el código.")
