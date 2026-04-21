@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import datetime
 
 st.set_page_config(page_title="Tablero de Indicadores - Cenoa", layout="wide")
 
@@ -11,7 +12,6 @@ sheet_url = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5u
 def load_data(url):
     csv_url = url.replace("/edit#gid=", "/export?format=csv&gid=")
     df = pd.read_csv(csv_url)
-    # Convertimos la columna de fecha a formato datetime de Python
     df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
     return df
 
@@ -27,12 +27,8 @@ def crear_grafico_torta(df, columna, titulo):
     conteo = df[columna].value_counts().reset_index()
     conteo.columns = [columna, 'Cantidad']
     fig = px.pie(
-        conteo, 
-        values='Cantidad', 
-        names=columna, 
-        title=titulo,
-        hole=0.4,
-        color_discrete_sequence=px.colors.qualitative.Pastel
+        conteo, values='Cantidad', names=columna, title=titulo,
+        hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel
     )
     fig.update_traces(textinfo='percent+label+value')
     return fig
@@ -40,44 +36,54 @@ def crear_grafico_torta(df, columna, titulo):
 try:
     df = load_data(sheet_url)
     
-    # --- BARRA LATERAL (FILTROS) ---
-    st.sidebar.header("Filtros de Búsqueda")
+    # --- BARRA LATERAL (FILTROS DE MES Y AÑO) ---
+    st.sidebar.header("Filtros de Período")
     
-    # Filtro de Fecha
-    min_date = df["Fecha de ultimo contacto"].min()
-    max_date = df["Fecha de ultimo contacto"].max()
+    # Extraemos años y meses disponibles en los datos
+    df['Anio'] = df["Fecha de ultimo contacto"].dt.year
+    df['Mes_Num'] = df["Fecha de ultimo contacto"].dt.month
     
-    date_range = st.sidebar.date_input(
-        "Rango de Fechas (Ult. contacto)",
-        value=(min_date, max_date),
-        min_value=min_date,
-        max_value=max_date
-    )
+    lista_anios = sorted(df['Anio'].dropna().unique().astype(int), reverse=True)
+    anio_sel = st.sidebar.selectbox("Seleccione Año", options=lista_anios)
 
+    meses_nombre = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+        7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+    
+    # Filtramos meses que realmente existen para ese año en tus datos
+    meses_disponibles = sorted(df[df['Anio'] == anio_sel]['Mes_Num'].unique())
+    opciones_meses = [meses_nombre[m] for m in meses_disponibles]
+    
+    mes_sel_nombre = st.sidebar.selectbox("Seleccione Mes", options=opciones_meses)
+    mes_sel_num = [k for k, v in meses_nombre.items() if v == mes_sel_nombre][0]
+
+    # Otros Filtros
+    st.sidebar.header("Otros Filtros")
     marca = st.sidebar.multiselect("MARCA", options=df["MARCA"].unique(), default=df["MARCA"].unique())
     canal = st.sidebar.multiselect("Canal de Venta", options=df["Canal de Venta"].unique(), default=df["Canal de Venta"].unique())
     vendedor = st.sidebar.multiselect("Vendedor", options=df["Vendedor"].unique(), default=df["Vendedor"].unique())
     
-    # Aplicar Filtros
-    mask = (
+    # Aplicar Filtros (Fecha + Categorías)
+    df_selection = df[
+        (df["Anio"] == anio_sel) & 
+        (df["Mes_Num"] == mes_sel_num) &
         (df["MARCA"].isin(marca)) & 
         (df["Canal de Venta"].isin(canal)) & 
         (df["Vendedor"].isin(vendedor))
-    )
-    
-    # Validar que el rango de fechas esté completo antes de filtrar
-    if len(date_range) == 2:
-        mask = mask & (df["Fecha de ultimo contacto"].dt.date >= date_range[0]) & (df["Fecha de ultimo contacto"].dt.date <= date_range[1])
+    ]
 
-    df_selection = df.loc[mask]
-
-    # --- KPIs PRINCIPALES ---
+    # --- INDICADORES PRINCIPALES ---
     k1, k2, k3 = st.columns(3)
     k1.metric("Q1 - NPS Satisfacción Gral.", f"{calcular_nps(df_selection['Q1 - Satisfacción general']):.1f}%")
     k2.metric("Q2 - NPS Recomendación", f"{calcular_nps(df_selection['Q2 - Recomendación - Concesionario']):.1f}%")
-    k3.metric("Muestra Filtrada", len(df_selection))
+    k3.metric("Casos en el Mes", len(df_selection))
 
     st.markdown("---")
+
+    # [Aquí sigue el resto de las pestañas (tabs) y gráficos del código anterior...]
+    # Solo asegúrate de copiar las secciones de tabs, gráficos de torta y tabla de detalle 
+    # del script anterior debajo de este bloque.
 
     # --- SECCIONES ---
     tab1, tab2, tab3, tab4 = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
@@ -118,10 +124,8 @@ try:
 
     st.markdown("---")
     st.subheader("💬 Detalle de Verbalizaciones (Q3)")
-    # Formateamos la fecha para que se vea bien en la tabla
     df_display = df_selection[["Fecha de ultimo contacto", "Nombre de cliente", "VIN", "Q3 - Verbalización", "Vendedor"]].copy()
     df_display["Fecha de ultimo contacto"] = df_display["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
-    
     st.dataframe(df_display.sort_values(by="Fecha de ultimo contacto", ascending=False), use_container_width=True, hide_index=True)
 
 except Exception as e:
