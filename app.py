@@ -10,6 +10,7 @@ st.title("📊 Monitor de Calidad y NPS - Enc Roar")
 sheet_url = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=567460007"
 
 def load_data(url):
+    # El gid 567460007 corresponde a la hoja "Enc Roar"
     csv_url = url.replace("/edit#gid=", "/export?format=csv&gid=")
     return pd.read_csv(csv_url)
 
@@ -19,6 +20,7 @@ def calcular_nps(serie):
     promotores = (serie >= 9).sum()
     detractores = (serie <= 6).sum()
     total = len(serie)
+    if total == 0: return 0
     return ((promotores - detractores) / total) * 100
 
 try:
@@ -44,6 +46,7 @@ try:
     nps_q2 = calcular_nps(df_selection["Q2 - Recomendación - Concesionario"])
     
     m1, m2, m3 = st.columns(3)
+    # Mostramos el NPS con un color dinámico
     m1.metric("NPS Q1 (Satisfacción)", f"{nps_q1:.1f}%")
     m2.metric("NPS Q2 (Recomendación)", f"{nps_q2:.1f}%")
     m3.metric("Total Encuestas", len(df_selection))
@@ -53,7 +56,6 @@ try:
     # --- DETALLE DE CLIENTES Y OBSERVACIONES ---
     st.subheader("Detalle de Contactos y Verbalizaciones")
     
-    # Seleccionamos solo las columnas de interés para la tabla de detalle
     columnas_detalle = [
         "Fecha de ultimo contacto", 
         "Nombre de cliente", 
@@ -62,20 +64,16 @@ try:
         "Vendedor"
     ]
     
-    # Mostramos la tabla con las columnas solicitadas
     st.dataframe(
         df_selection[columnas_detalle].sort_values(by="Fecha de ultimo contacto", ascending=False),
         use_container_width=True,
         hide_index=True
     )
 
-    # --- GRÁFICO DE VENDEDORES (CORREGIDO) ---
+    # --- GRÁFICO DE VENDEDORES ---
     st.subheader("Performance por Vendedor (Cant. Encuestas)")
     
-    # Creamos el conteo y reseteamos el índice correctamente
     conteo_vendedores = df_selection["Vendedor"].value_counts().reset_index()
-    
-    # Ajustamos los nombres de las columnas para que Plotly no se confunda
     conteo_vendedores.columns = ['Vendedor', 'Encuestas']
     
     fig_vendedor = px.bar(
@@ -90,3 +88,7 @@ try:
     
     fig_vendedor.update_traces(textposition='outside')
     st.plotly_chart(fig_vendedor, use_container_width=True)
+
+except Exception as e:
+    st.error(f"Error al cargar datos o nombres de columnas: {e}")
+    st.info("Revisa que los nombres de las columnas en Google Sheets no hayan cambiado.")
