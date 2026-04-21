@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import math
 
 st.set_page_config(page_title="Tablero de Indicadores - Cenoa", layout="wide")
 
@@ -12,139 +13,106 @@ def load_data(url):
     df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
     return df
 
-def calcular_nps(serie):
+def calcular_nps_detallado(serie):
     serie = pd.to_numeric(serie, errors='coerce').dropna()
-    if serie.empty: return 0
+    total = len(serie)
+    if total == 0: return 0, 0, 0, 0
     promotores = (serie >= 9).sum()
     detractores = (serie <= 6).sum()
-    total = len(serie)
-    if total == 0: return 0
-    return ((promotores - detractores) / total) * 100
+    nps = ((promotores - detractores) / total) * 100
+    return nps, promotores, detractores, total
 
-# Función para definir el color según el rango Stellantis
+# Función para calcular cuántas encuestas excelentes faltan para llegar al 94%
+def calcular_faltante_94(promotores, detractores, total):
+    objetivo = 94
+    nps_actual = ((promotores - detractores) / total) * 100
+    if nps_actual >= objetivo:
+        return "✅ ¡Excelente! Seguir así mejorando y animando."
+    
+    # Ecuación: ((P + X) - D) / (T + X) = 0.94
+    # Despejando X: X = (0.94 * T + D - P) / (1 - 0.94)
+    x = (0.94 * total + detractores - promotores) / (1 - 0.94)
+    necesarios = math.ceil(x)
+    return f"🚨 Faltan {necesarios} encuestas (9-10) para el 94%"
+
 def obtener_color_rango(valor):
-    if valor >= 94: return '#28a745' # Verde
-    if valor >= 90: return '#ffc107' # Amarillo/Naranja
-    return '#dc3545' # Rojo
+    if valor >= 94: return '#28a745'
+    if valor >= 90: return '#ffc107'
+    return '#dc3545'
 
-# Función para crear una tarjeta de KPI con color de fondo
 def kpi_card(titulo, valor):
     color = obtener_color_rango(valor)
     texto_color = "black" if color == '#ffc107' else "white"
     st.markdown(f"""
-        <div style="background-color:{color}; padding:20px; border-radius:10px; text-align:center;">
-            <h3 style="color:{texto_color}; margin:0;">{titulo}</h3>
-            <h1 style="color:{texto_color}; margin:0;">{valor:.1f}%</h1>
+        <div style="background-color:{color}; padding:20px; border-radius:10px; text-align:center; border: 1px solid #ddd;">
+            <p style="color:{texto_color}; font-size:16px; margin:0;">{titulo}</p>
+            <h1 style="color:{texto_color}; margin:0; font-size:45px;">{valor:.1f}%</h1>
         </div>
         """, unsafe_allow_html=True)
-
-def crear_grafico_torta(df, columna, titulo):
-    conteo = df[columna].value_counts().reset_index()
-    conteo.columns = [columna, 'Cantidad']
-    fig = px.pie(conteo, values='Cantidad', names=columna, title=titulo, hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-    fig.update_traces(textinfo='percent+label+value')
-    return fig
 
 try:
     df = load_data(sheet_url)
     
-    # --- BARRA LATERAL ---
+    # --- FILTROS ---
     st.sidebar.header("Filtros Globales")
     df['Anio'] = df["Fecha de ultimo contacto"].dt.year
     df['Mes_Num'] = df["Fecha de ultimo contacto"].dt.month
     
     lista_anios = sorted(df['Anio'].dropna().unique().astype(int), reverse=True)
     anio_sel = st.sidebar.selectbox("Seleccione Año", options=lista_anios)
-
+    
     meses_nombre = {1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
                     7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"}
-    
     meses_disponibles = sorted(df[df['Anio'] == anio_sel]['Mes_Num'].unique())
     opciones_meses = [meses_nombre[m] for m in meses_disponibles]
     mes_sel_nombre = st.sidebar.selectbox("Seleccione Mes", options=opciones_meses)
     mes_sel_num = [k for k, v in meses_nombre.items() if v == mes_sel_nombre][0]
 
-    marca = st.sidebar.multiselect("MARCA", options=df["MARCA"].unique(), default=df["MARCA"].unique())
-    canal = st.sidebar.multiselect("Canal de Venta", options=df["Canal de Venta"].unique(), default=df["Canal de Venta"].unique())
+    df_base = df[(df["Anio"] == anio_sel) & (df["Mes_Num"] == mes_sel_num)]
 
-    df_base = df[
-        (df["Anio"] == anio_sel) & 
-        (df["Mes_Num"] == mes_sel_num) &
-        (df["MARCA"].isin(marca)) & 
-        (df["Canal de Venta"].isin(canal))
-    ]
+    st.title("📊 Gestión de Calidad - Grupo Cenoa")
+    p1, p2 = st.tabs(["🏠 Monitor Global", "👤 Rendimiento por Vendedor"])
 
-    # --- NAVEGACIÓN PRINCIPAL ---
-    st.title("📊 Sistema de Gestión de Calidad")
-    pestana_principal, pestana_vendedores = st.tabs(["🏠 Monitor de Calidad Total", "👤 Rendimiento por Vendedor"])
-
-    # --- PESTAÑA 1: MONITOR GLOBAL ---
-    with pestana_principal:
-        st.header(f"Resultados Globales - {mes_sel_nombre} {anio_sel}")
+    with p1:
+        nps_q1, _, _, count = calcular_nps_detallado(df_base['Q1 - Satisfacción general'])
+        nps_q2, _, _, _ = calcular_nps_detallado(df_base['Q2 - Recomendación - Concesionario'])
         
-        # Indicadores con formato de color
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            kpi_card("Q1 - NPS Satisfacción Gral.", calcular_nps(df_base['Q1 - Satisfacción general']))
-        with col2:
-            kpi_card("Q2 - NPS Recomendación", calcular_nps(df_base['Q2 - Recomendación - Concesionario']))
-        with col3:
-            st.metric("Muestra Total", len(df_base))
+        c1, c2, c3 = st.columns(3)
+        with c1: kpi_card("Q1 - NPS Satisfacción", nps_q1)
+        with c2: kpi_card("Q2 - NPS Recomendación", nps_q2)
+        with c3: st.metric("Encuestas Totales", count)
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
+    with p2:
+        st.header("Análisis de Objetivos Stellantis (Mínimo 94%)")
         
-        with sub_tab1:
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Q4 - Cortesía", f"{calcular_nps(df_base['Q4 - Cortesía y amabilidad']):.1f}%")
-            c2.metric("Q5 - Competencia", f"{calcular_nps(df_base['Q5 - Competencia Vendedor']):.1f}%")
-            c3.metric("Q8 - Info Pre-entrega", f"{calcular_nps(df_base['Q8 - Satisfacción información entre compra y entrega']):.1f}%")
-        with sub_tab2:
-            ct1, ct2 = st.columns(2)
-            with ct1: st.plotly_chart(crear_grafico_torta(df_base, "Q6 - Ofrecimiento Test Drive", "Q6 - Ofrecimiento TD"), use_container_width=True)
-            with ct2: st.metric("Q7 - NPS Test Drive", f"{calcular_nps(df_base['Q7 - Satisfacción Test Drive']):.1f}%")
-        with sub_tab3:
-            cf1, cf2 = st.columns(2)
-            with cf1: st.plotly_chart(crear_grafico_torta(df_base, "Q9 - Financiación utilizada", "Q9 - Tipo de Pago"), use_container_width=True)
-            with cf2: st.metric("Q10 - NPS Financiación", f"{calcular_nps(df_base['Q10 - Satisfacción Financiación utilizada']):.1f}%")
-        with sub_tab4:
-            ce1, ce2 = st.columns(2)
-            ce1.metric("Q11 - Momento Entrega", f"{calcular_nps(df_base['Q11 - Satisfacción Momento de la entrega']):.1f}%")
-            ce2.metric("Q13 - Entrega General", f"{calcular_nps(df_base['Q13 - Satisfacción Entrega General']):.1f}%")
-
-    # --- PESTAÑA 2: RENDIMIENTO POR VENDEDOR ---
-    with pestana_vendedores:
-        st.header("Análisis Comparativo de Asesores")
+        # Procesar datos por vendedor
+        resumen = []
+        for vend, data in df_base.groupby("Vendedor"):
+            nps, prom, detr, total = calcular_nps_detallado(data["Q1 - Satisfacción general"])
+            accion = calcular_faltante_94(prom, detr, total)
+            resumen.append({"Vendedor": vend, "NPS Q1 %": nps, "Cantidad": total, "Acción/Objetivo": accion})
         
-        if not df_base.empty:
-            vendedor_nps = df_base.groupby("Vendedor").apply(lambda x: calcular_nps(x["Q1 - Satisfacción general"])).reset_index()
-            vendedor_nps.columns = ["Vendedor", "NPS Q1 %"]
-            
-            vendedor_count = df_base["Vendedor"].value_counts().reset_index()
-            vendedor_count.columns = ["Vendedor", "Cantidad"]
-            
-            comparativa = pd.merge(vendedor_nps, vendedor_count, on="Vendedor")
-            comparativa['Color_Hex'] = comparativa['NPS Q1 %'].apply(obtener_color_rango)
+        comp = pd.DataFrame(resumen).sort_values("NPS Q1 %", ascending=False)
 
-            fig_comp = px.bar(
-                comparativa.sort_values("NPS Q1 %", ascending=False),
-                x="Vendedor", y="NPS Q1 %", text="NPS Q1 %",
-                title="Ranking de NPS por Vendedor (Semáforo de Calidad)",
-                color='Color_Hex',
-                color_discrete_map={'#28a745': '#28a745', '#ffc107': '#ffc107', '#dc3545': '#dc3545'},
-                labels={"NPS Q1 %": "NPS (%)"}
-            )
-            
-            fig_comp.update_layout(yaxis_range=[0, 110], showlegend=False)
-            fig_comp.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-            st.plotly_chart(fig_comp, use_container_width=True)
+        # Gráfico con línea de objetivo
+        fig = px.bar(comp, x="Vendedor", y="NPS Q1 %", text="NPS Q1 %",
+                     color="NPS Q1 %", range_y=[0, 110],
+                     color_continuous_scale=[[0, '#dc3545'], [0.89, '#dc3545'], [0.90, '#ffc107'], [0.939, '#ffc107'], [0.94, '#28a745'], [1, '#28a745']])
+        
+        # Agregar línea roja de objetivo 94%
+        fig.add_hline(y=94, line_dash="dash", line_color="red", annotation_text="Objetivo 94%", annotation_position="top left")
+        fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+        st.plotly_chart(fig, use_container_width=True)
 
-            st.subheader("Tabla Detallada de Rendimiento")
-            # Mostramos la tabla sin la columna de color
-            st.dataframe(comparativa[["Vendedor", "NPS Q1 %", "Cantidad"]].sort_values("NPS Q1 %", ascending=False), 
-                         use_container_width=True, hide_index=True)
-        else:
-            st.warning("No hay datos para los filtros seleccionados.")
+        st.subheader("Tabla de Acción Inmediata")
+        
+        # Estilo para la tabla: Texto en rojo para los que no llegan
+        def color_rojo_fallo(val):
+            color = 'red' if '🚨' in str(val) else 'green'
+            return f'color: {color}; font-weight: bold'
+
+        st.dataframe(comp.style.applymap(color_rojo_fallo, subset=['Acción/Objetivo']), 
+                     use_container_width=True, hide_index=True)
 
 except Exception as e:
-    st.error(f"Error crítico en la aplicación: {e}")
+    st.error(f"Error: {e}")
