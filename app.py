@@ -105,17 +105,23 @@ try:
         # Unimos los datos
         comparativa = pd.merge(vendedor_nps, vendedor_count, on="Vendedor")
 
-        # Gráfico de barras comparativo
+        # Gráfico de barras comparativo con escala FIJA
         fig_comp = px.bar(
             comparativa.sort_values("NPS Q1 %", ascending=False),
             x="Vendedor", y="NPS Q1 %",
             text="NPS Q1 %",
             color="NPS Q1 %",
-            title="Ranking de NPS por Vendedor",
-            color_continuous_scale="RdYlGn", # Rojo a Verde
+            title="Ranking de NPS por Vendedor (Escala 0-100%)",
+            # Fijamos el rango de colores de 0 a 100
+            range_color=[0, 100],
+            color_continuous_scale="RdYlGn", # Rojo - Amarillo - Verde
             labels={"NPS Q1 %": "NPS (%)"}
         )
+        
+        # Ajustamos el eje Y para que siempre llegue a 100
+        fig_comp.update_layout(yaxis_range=[0, 105])
         fig_comp.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+        
         st.plotly_chart(fig_comp, use_container_width=True)
 
         st.subheader("Tabla Detallada de Rendimiento")
@@ -126,6 +132,3 @@ try:
         df_display = df_base[["Fecha de ultimo contacto", "Nombre de cliente", "Vendedor", "Q3 - Verbalización"]].copy()
         df_display["Fecha de ultimo contacto"] = df_display["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
         st.dataframe(df_display.sort_values("Vendedor"), use_container_width=True, hide_index=True)
-
-except Exception as e:
-    st.error(f"Error en la aplicación: {e}")
