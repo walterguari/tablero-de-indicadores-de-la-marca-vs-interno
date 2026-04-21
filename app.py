@@ -23,7 +23,7 @@ def load_data(url):
             if val <= 6: return "Detractor"
             return "Sin Datos"
         
-        # Categorizamos ambas columnas para los filtros
+        # Categorización para filtros cruzados de ambos indicadores principales
         df['Cat_Q1'] = df['Q1 - Satisfacción general'].apply(categorizar_nps)
         df['Cat_Q2'] = df['Q2 - Recomendación - Concesionario'].apply(categorizar_nps)
         return df
@@ -53,8 +53,8 @@ def crear_gauge_moderno(valor, titulo):
     fig = go.Figure(go.Indicator(
         mode = "gauge+number",
         value = valor,
-        title = {'text': f"<b>{titulo}</b>", 'font': {'size': 20, 'color': '#333'}},
-        number = {'suffix': "%", 'font': {'size': 40}},
+        title = {'text': f"<b>{titulo}</b>", 'font': {'size': 22, 'color': '#333'}},
+        number = {'suffix': "%", 'font': {'size': 45}},
         gauge = {
             'axis': {'range': [0, 100], 'visible': False},
             'bar': {'color': color_viva, 'thickness': 0.15},
@@ -62,7 +62,7 @@ def crear_gauge_moderno(valor, titulo):
             'threshold': {'line': {'color': "black", 'width': 3}, 'thickness': 0.8, 'value': 94}
         }
     ))
-    fig.update_layout(height=250, margin=dict(l=30, r=30, t=40, b=0), paper_bgcolor='rgba(0,0,0,0)')
+    fig.update_layout(height=280, margin=dict(l=30, r=30, t=50, b=0), paper_bgcolor='rgba(0,0,0,0)')
     return fig
 
 def crear_grafico_torta(df, columna, titulo):
@@ -77,7 +77,7 @@ def crear_grafico_torta(df, columna, titulo):
 try:
     df = load_data(sheet_url)
     if not df.empty:
-        # --- SIDEBAR CON MULTI-MES ---
+        # --- SIDEBAR CON MULTISELECCIÓN DE MESES ---
         st.sidebar.header("Filtros Globales")
         df['Anio'] = df["Fecha de ultimo contacto"].dt.year
         df['Mes_Num'] = df["Fecha de ultimo contacto"].dt.month
@@ -88,7 +88,7 @@ try:
         meses_disp_nums = sorted(df[df['Anio'] == anio_sel]['Mes_Num'].unique())
         meses_disp_nombres = [meses_n[m] for m in meses_disp_nums]
         
-        # Filtro multiselección de meses
+        # Filtro de meses acumulados
         meses_sel_nombres = st.sidebar.multiselect("Seleccione Mes(es)", opciones=meses_disp_nombres, default=meses_disp_nombres[-1:])
         meses_sel_nums = [k for k, v in meses_n.items() if v in meses_sel_nombres]
 
@@ -101,42 +101,46 @@ try:
         st.title("📊 Gestión de Calidad - Grupo Cenoa")
         tab_global, tab_vendedores = st.tabs(["🏠 Monitor Global", "👤 Rendimiento por Vendedor"])
 
+        # Manejo de estado para el filtrado dinámico de comentarios
         if 'filtro_col' not in st.session_state: st.session_state.filtro_col = "Cat_Q1"
         if 'filtro_val' not in st.session_state: st.session_state.filtro_val = "Todos"
 
         with tab_global:
+            st.header(f"Resultados Acumulados - {', '.join(meses_sel_nombres)}")
             nps_q1, p_q1, n_q1, d_q1, t_q1 = calcular_nps_detallado(df_base['Q1 - Satisfacción general'])
-            nps_q2, p_q2, n_q2, d_q2, t_q2 = calcular_nps_detallado(df_base['Q2 - Recomendación - Concesionario'])
+            nps_q2, p_q2, n_q2, d_q2, _ = calcular_nps_detallado(df_base['Q2 - Recomendación - Concesionario'])
 
-            # --- REDISEÑO: AMBOS CON BOTONES ---
-            c_q1, c_q2, c_tot = st.columns([2.2, 2.2, 0.6])
+            # --- SECCIÓN DE RELOJES CON DOBLE BOTONERA ---
+            c_gauge1, c_gauge2, c_metric = st.columns([2.2, 2.2, 0.6])
             
-            with c_q1:
+            with c_gauge1:
                 st.plotly_chart(crear_gauge_moderno(nps_q1, "Q1 - SATISFACCIÓN"), use_container_width=True)
-                col_b1, col_b2, col_b3 = st.columns(3)
-                if col_b1.button(f"🟢 {p_q1}\nProm", key="q1_p"): 
+                st.write("**Filtrar comentarios Q1:**")
+                cb1, cb2, cb3 = st.columns(3)
+                if cb1.button(f"🟢 {p_q1}\nProm", key="q1p"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1", "Promotor"
-                if col_b2.button(f"🟡 {n_q1}\nNeu", key="q1_n"): 
+                if cb2.button(f"🟡 {n_q1}\nNeu", key="q1n"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1", "Neutro"
-                if col_b3.button(f"🔴 {d_q1}\nDet", key="q1_d"): 
+                if cb3.button(f"🔴 {d_q1}\nDet", key="q1d"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1", "Detractor"
 
-            with c_q2:
+            with c_gauge2:
                 st.plotly_chart(crear_gauge_moderno(nps_q2, "Q2 - RECOMENDACIÓN"), use_container_width=True)
-                col_b4, col_b5, col_b6 = st.columns(3)
-                if col_b4.button(f"🟢 {p_q2}\nProm", key="q2_p"): 
+                st.write("**Filtrar comentarios Q2:**")
+                cb4, cb5, cb6 = st.columns(3)
+                if cb4.button(f"🟢 {p_q2}\nProm", key="q2p"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2", "Promotor"
-                if col_b5.button(f"🟡 {n_q2}\nNeu", key="q2_n"): 
+                if cb5.button(f"🟡 {n_q2}\nNeu", key="q2n"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2", "Neutro"
-                if col_b6.button(f"🔴 {d_q2}\nDet", key="q2_d"): 
+                if cb6.button(f"🔴 {d_q2}\nDet", key="q2d"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2", "Detractor"
 
-            with c_tot:
+            with c_metric:
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 st.metric("Muestra", t_q1)
                 if st.button("🔄 Ver\nTodos"): st.session_state.filtro_val = "Todos"
 
-            # --- SUB-TABS ---
+            # --- SECCIÓN DE SUB-TABS (VENTAS, TEST DRIVE, FINANZAS, ENTREGA) ---
             st.markdown("---")
             stabs = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
             with stabs[0]:
@@ -151,7 +155,7 @@ try:
             with stabs[2]:
                 cf1, cf2 = st.columns(2)
                 cf1.metric("Q10 - NPS Financiación", f"{calcular_nps_detallado(df_base['Q10 - Satisfacción Financiación utilizada'])[0]:.1f}%")
-                cf2.plotly_chart(crear_grafico_torta(df_base, 'Q9 - Financiación utilizada', 'Q9 - Mix Financiación'), use_container_width=True)
+                cf2.plotly_chart(crear_grafico_torta(df_base, 'Q9 - Financiación utilizada', 'Mix Financiación'), use_container_width=True)
             with stabs[3]:
                 ce1, ce2 = st.columns(2)
                 ce1.metric("Q11 - Momento Entrega", f"{calcular_nps_detallado(df_base['Q11 - Satisfacción Momento de la entrega'])[0]:.1f}%")
@@ -159,8 +163,8 @@ try:
 
             # --- TABLA DE VERBALIZACIONES ---
             st.markdown("---")
-            label_filtro = "Todos los comentarios" if st.session_state.filtro_val == "Todos" else f"Comentarios: {st.session_state.filtro_val} en {st.session_state.filtro_col.replace('Cat_', '')}"
-            st.subheader(f"💬 Verbalizaciones (Q3) - {label_filtro}")
+            label_f = "Todos los comentarios" if st.session_state.filtro_val == "Todos" else f"Comentarios: {st.session_state.filtro_val} en {st.session_state.filtro_col.replace('Cat_', '')}"
+            st.subheader(f"💬 Verbalizaciones (Q3) - {label_f}")
             
             df_v = df_base[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Vendedor", "Cat_Q1", "Cat_Q2"]].copy()
             if st.session_state.filtro_val != "Todos":
@@ -171,7 +175,7 @@ try:
                          use_container_width=True, hide_index=True)
 
         with tab_vendedores:
-            st.header("Ranking y Objetivos Stellantis")
+            st.header("Ranking y Objetivos por Asesor")
             resumen = []
             for vend, data in df_base.groupby("Vendedor"):
                 nv, pv, nev, dv, tv = calcular_nps_detallado(data["Q1 - Satisfacción general"])
@@ -181,4 +185,4 @@ try:
                          use_container_width=True, hide_index=True)
 
 except Exception as e:
-    st.error(f"Error: {e}")
+    st.error(f"Error crítico: {e}")
