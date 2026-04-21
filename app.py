@@ -158,7 +158,8 @@ try:
             if st.session_state.filtro_val != "Todos":
                 df_v = df_v[df_v[st.session_state.filtro_col] == st.session_state.filtro_val]
             df_v["Fecha de ultimo contacto"] = df_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
-            st.dataframe(df_v[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Vendedor"]].sort_values("Fecha de ultimo contacto", ascending=False), use_container_width=True, hide_index=True)
+            st.dataframe(df_v[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Vendedor"]].sort_values("Fecha de ultimo contacto", ascending=False), 
+                         use_container_width=True, hide_index=True)
 
         with tab_vendedores:
             st.header("Ranking y Objetivos por Asesor")
@@ -169,15 +170,37 @@ try:
                     resumen.append({"Vendedor": vend, "NPS Q1 %": nv, "Cant.": tv, "Acción": calcular_faltante_94(pv, dv, tv)})
                 comp = pd.DataFrame(resumen).sort_values("NPS Q1 %", ascending=False)
                 
-                # --- GRÁFICO DE BARRAS RECUPERADO ---
-                fig_rank = px.bar(comp, x="Vendedor", y="NPS Q1 %", text="NPS Q1 %", color="NPS Q1 %", range_y=[0, 110],
-                                  color_continuous_scale=[[0, '#dc3545'], [0.899, '#dc3545'], [0.90, '#ffc107'], [0.939, '#ffc107'], [0.94, '#28a745'], [1, '#28a745']])
+                # --- GRÁFICO DE BARRAS CON COLORES POR RANGO ---
+                # Definimos una función de color específica para las barras
+                def get_bar_color(val):
+                    if val >= 94: return '#28a745' # Verde
+                    if val >= 90: return '#ffc107' # Amarillo
+                    return '#dc3545' # Rojo
+
+                comp['Bar_Color'] = comp['NPS Q1 %'].apply(get_bar_color)
+
+                fig_rank = px.bar(
+                    comp, 
+                    x="Vendedor", 
+                    y="NPS Q1 %", 
+                    text="NPS Q1 %", 
+                    range_y=[0, 110],
+                    color="Bar_Color", # Usamos nuestra columna de colores
+                    color_discrete_map={
+                        '#28a745': '#28a745',
+                        '#ffc107': '#ffc107',
+                        '#dc3545': '#dc3545'
+                    }
+                )
+                
                 fig_rank.add_hline(y=94, line_dash="dash", line_color="black", annotation_text="Objetivo 94%")
                 fig_rank.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+                # Ocultamos la leyenda de colores para que no ensucie
+                fig_rank.update_layout(showlegend=False)
                 st.plotly_chart(fig_rank, use_container_width=True)
 
                 st.subheader("Detalle de Objetivos")
-                st.dataframe(comp.style.map(lambda x: 'color: red; font-weight: bold' if '🚨' in str(x) else 'color: green', subset=['Acción']), 
+                st.dataframe(comp.drop(columns=['Bar_Color']).style.map(lambda x: 'color: red; font-weight: bold' if '🚨' in str(x) else 'color: green', subset=['Acción']), 
                              use_container_width=True, hide_index=True)
 
 except Exception as e:
