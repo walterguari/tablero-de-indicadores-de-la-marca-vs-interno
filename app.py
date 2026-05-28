@@ -115,11 +115,12 @@ try:
 
         st.title("📊 Gestión de Calidad - Grupo Cenoa")
         
-        # Definición de las 3 pestañas principales
-        tab_global, tab_vendedores, tab_cortesia = st.tabs([
+        # Definición de las 4 pestañas principales
+        tab_global, tab_vendedores, tab_cortesia, tab_competencia = st.tabs([
             "🏠 Monitor Global", 
             "👤 Rendimiento por Vendedor (Q2)", 
-            "🤝 Cortesía por Vendedor (Q4)"
+            "🤝 Cortesía por Vendedor (Q4)",
+            "🧠 Competencia por Vendedor (Q5)"
         ])
 
         if 'filtro_col' not in st.session_state: st.session_state.filtro_col = "Cat_Q1"
@@ -226,7 +227,7 @@ try:
                              use_container_width=True, hide_index=True)
 
         # ==========================================================
-        # TAB: CORTESÍA POR VENDEDOR (Q4) - ¡NUEVA!
+        # TAB: CORTESÍA POR VENDEDOR (Q4)
         # ==========================================================
         with tab_cortesia:
             st.header("Ranking de Cortesía y Amabilidad por Asesor (Q4)")
@@ -257,6 +258,41 @@ try:
 
                 st.subheader("Detalle de Objetivos - Cortesía")
                 st.dataframe(comp_q4.drop(columns=['Bar_Color']).style.map(lambda x: 'color: red; font-weight: bold' if '🚨' in str(x) else 'color: green', subset=['Acción']), 
+                             use_container_width=True, hide_index=True)
+
+        # ==========================================================
+        # TAB: COMPETENCIA POR VENDEDOR (Q5) - ¡NUEVA!
+        # ==========================================================
+        with tab_competencia:
+            st.header("Ranking de Competencia del Vendedor por Asesor (Q5)")
+            if not df_base.empty:
+                resumen_q5 = []
+                for vend, data in df_base.groupby("Vendedor"):
+                    # Cálculo de NPS dedicado para la columna Q5
+                    nv_q5, pv_q5, nev_q5, dv_q5, tv_q5 = calcular_nps_detallado(data["Q5 - Competencia Vendedor"])
+                    resumen_q5.append({
+                        "Vendedor": vend, 
+                        "NPS Competencia %": nv_q5, 
+                        "Encuestas": tv_q5, 
+                        "Acción": calcular_faltante_94(pv_q5, dv_q5, tv_q5)
+                    })
+                
+                comp_q5 = pd.DataFrame(resumen_q5).sort_values("NPS Competencia %", ascending=False)
+                comp_q5['Bar_Color'] = comp_q5['NPS Competencia %'].apply(get_bar_color)
+                
+                fig_rank_q5 = go.Figure(go.Bar(
+                    x=comp_q5["Vendedor"],
+                    y=comp_q5["NPS Competencia %"],
+                    text=comp_q5["NPS Competencia %"].round(1).astype(str) + "%",
+                    textposition='outside',
+                    marker_color=comp_q5['Bar_Color']
+                ))
+                fig_rank_q5.add_hline(y=94, line_dash="dash", line_color="black", annotation_text="Objetivo 94%", annotation_position="top left")
+                fig_rank_q5.update_layout(yaxis=dict(range=[0, 110]), height=400, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_rank_q5, use_container_width=True)
+
+                st.subheader("Detalle de Objetivos - Competencia Vendedor")
+                st.dataframe(comp_q5.drop(columns=['Bar_Color']).style.map(lambda x: 'color: red; font-weight: bold' if '🚨' in str(x) else 'color: green', subset=['Acción']), 
                              use_container_width=True, hide_index=True)
 
 except Exception as e:
