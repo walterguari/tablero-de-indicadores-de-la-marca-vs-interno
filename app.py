@@ -10,6 +10,7 @@ st.set_page_config(page_title="Tablero de Indicadores - Cenoa", layout="wide")
 sheet_url = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=567460007"
 
 # --- FUNCIONES DE DATOS Y CÁLCULOS ---
+@st.cache_data(ttl=600)  # Optimización: guarda en caché los datos por 10 minutos
 def load_data(url):
     try:
         csv_url = url.replace("/edit#gid=", "/export?format=csv&gid=")
@@ -47,8 +48,13 @@ def calcular_faltante_94(promotores, detractores, total):
     x = (0.94 * total + detractores - promotores) / (1 - 0.94)
     return f"🚨 Faltan {math.ceil(x)} encuestas (9-10) para el 94%"
 
+def get_bar_color(val):
+    if val >= 94: return '#28a745'
+    if val >= 90: return '#ffc107'
+    return '#dc3545'
+
 def crear_gauge_moderno(valor, titulo):
-    color_viva = '#28a745' if valor >= 94 else ('#ffc107' if valor >= 90 else '#dc3545')
+    color_viva = get_bar_color(valor)
     fig = go.Figure(go.Indicator(
         mode = "gauge+number",
         value = valor,
@@ -108,11 +114,20 @@ try:
         df_base = df_time[(df_time["MARCA"].isin(marcas)) & (df_time["Canal de Venta"].isin(canales))]
 
         st.title("📊 Gestión de Calidad - Grupo Cenoa")
-        tab_global, tab_vendedores = st.tabs(["🏠 Monitor Global", "👤 Rendimiento por Vendedor"])
+        
+        # Definición de las 3 pestañas principales
+        tab_global, tab_vendedores, tab_cortesia = st.tabs([
+            "🏠 Monitor Global", 
+            "👤 Rendimiento por Vendedor (Q2)", 
+            "🤝 Cortesía por Vendedor (Q4)"
+        ])
 
         if 'filtro_col' not in st.session_state: st.session_state.filtro_col = "Cat_Q1"
         if 'filtro_val' not in st.session_state: st.session_state.filtro_val = "Todos"
 
+        # ==========================================================
+        # TAB: MONITOR GLOBAL
+        # ==========================================================
         with tab_global:
             st.header(f"Resultados de: {', '.join(meses_sel_nombres)}")
             nps_q1, p_q1, n_q1, d_q1, t_q1 = calcular_nps_detallado(df_base['Q1 - Satisfacción general'])
@@ -124,23 +139,31 @@ try:
                 col_b1, col_b2, col_b3 = st.columns(3)
                 if col_b1.button(f"🟢 {p_q1}\nProm", key="q1_p"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1", "Promotor"
+                    st.rerun()
                 if col_b2.button(f"🟡 {n_q1}\nNeu", key="q1_n"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1", "Neutro"
+                    st.rerun()
                 if col_b3.button(f"🔴 {d_q1}\nDet", key="q1_d"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1", "Detractor"
+                    st.rerun()
             with c_q2:
                 st.plotly_chart(crear_gauge_moderno(nps_q2, "Q2 - RECOMENDACIÓN"), use_container_width=True)
                 col_b4, col_b5, col_b6 = st.columns(3)
                 if col_b4.button(f"🟢 {p_q2}\nProm", key="q2_p"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2", "Promotor"
+                    st.rerun()
                 if col_b5.button(f"🟡 {n_q2}\nNeu", key="q2_n"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2", "Neutro"
+                    st.rerun()
                 if col_b6.button(f"🔴 {d_q2}\nDet", key="q2_d"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2", "Detractor"
+                    st.rerun()
             with c_tot:
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 st.metric("Muestra", t_q1)
-                if st.button("🔄 Ver\nTodos"): st.session_state.filtro_val = "Todos"
+                if st.button("🔄 Ver\nTodos"): 
+                    st.session_state.filtro_val = "Todos"
+                    st.rerun()
 
             st.markdown("---")
             stabs = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
@@ -169,11 +192,15 @@ try:
             if st.session_state.filtro_val != "Todos":
                 df_v = df_v[df_v[st.session_state.filtro_col] == st.session_state.filtro_val]
             
+            df_v = df_v.sort_values("Fecha de ultimo contacto", ascending=False)
             df_v["Fecha de ultimo contacto"] = df_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
-            st.dataframe(df_v[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Vendedor"]].sort_values("Fecha de ultimo contacto", ascending=False), use_container_width=True, hide_index=True)
+            st.dataframe(df_v[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Vendedor"]], use_container_width=True, hide_index=True)
 
+        # ==========================================================
+        # TAB: RENDIMIENTO POR VENDEDOR (Q2)
+        # ==========================================================
         with tab_vendedores:
-            st.header("Ranking y Objetivos por Asesor (Q2)")
+            st.header("Ranking y Objetivos por Asesor (Q2 - Recomendación)")
             if not df_base.empty:
                 resumen = []
                 for vend, data in df_base.groupby("Vendedor"):
@@ -181,21 +208,55 @@ try:
                     resumen.append({"Vendedor": vend, "NPS Q2 %": nv, "Cant.": tv, "Acción": calcular_faltante_94(pv, dv, tv)})
                 comp = pd.DataFrame(resumen).sort_values("NPS Q2 %", ascending=False)
                 
-                def get_bar_color(val):
-                    if val >= 94: return '#28a745'
-                    if val >= 90: return '#ffc107'
-                    return '#dc3545'
-
                 comp['Bar_Color'] = comp['NPS Q2 %'].apply(get_bar_color)
-                fig_rank = px.bar(comp, x="Vendedor", y="NPS Q2 %", text="NPS Q2 %", range_y=[0, 110], color="Bar_Color",
-                                  color_discrete_map={'#28a745': '#28a745', '#ffc107': '#ffc107', '#dc3545': '#dc3545'})
-                fig_rank.add_hline(y=94, line_dash="dash", line_color="black", annotation_text="Objetivo 94%")
-                fig_rank.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-                fig_rank.update_layout(showlegend=False)
+                
+                fig_rank = go.Figure(go.Bar(
+                    x=comp["Vendedor"],
+                    y=comp["NPS Q2 %"],
+                    text=comp["NPS Q2 %"].round(1).astype(str) + "%",
+                    textposition='outside',
+                    marker_color=comp['Bar_Color']
+                ))
+                fig_rank.add_hline(y=94, line_dash="dash", line_color="black", annotation_text="Objetivo 94%", annotation_position="top left")
+                fig_rank.update_layout(yaxis=dict(range=[0, 110]), height=400, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                 st.plotly_chart(fig_rank, use_container_width=True)
 
                 st.subheader("Detalle de Objetivos")
                 st.dataframe(comp.drop(columns=['Bar_Color']).style.map(lambda x: 'color: red; font-weight: bold' if '🚨' in str(x) else 'color: green', subset=['Acción']), 
+                             use_container_width=True, hide_index=True)
+
+        # ==========================================================
+        # TAB: CORTESÍA POR VENDEDOR (Q4) - ¡NUEVA!
+        # ==========================================================
+        with tab_cortesia:
+            st.header("Ranking de Cortesía y Amabilidad por Asesor (Q4)")
+            if not df_base.empty:
+                resumen_q4 = []
+                for vend, data in df_base.groupby("Vendedor"):
+                    nv_q4, pv_q4, nev_q4, dv_q4, tv_q4 = calcular_nps_detallado(data["Q4 - Cortesía y amabilidad"])
+                    resumen_q4.append({
+                        "Vendedor": vend, 
+                        "NPS Cortesía %": nv_q4, 
+                        "Encuestas": tv_q4, 
+                        "Acción": calcular_faltante_94(pv_q4, dv_q4, tv_q4)
+                    })
+                
+                comp_q4 = pd.DataFrame(resumen_q4).sort_values("NPS Cortesía %", ascending=False)
+                comp_q4['Bar_Color'] = comp_q4['NPS Cortesía %'].apply(get_bar_color)
+                
+                fig_rank_q4 = go.Figure(go.Bar(
+                    x=comp_q4["Vendedor"],
+                    y=comp_q4["NPS Cortesía %"],
+                    text=comp_q4["NPS Cortesía %"].round(1).astype(str) + "%",
+                    textposition='outside',
+                    marker_color=comp_q4['Bar_Color']
+                ))
+                fig_rank_q4.add_hline(y=94, line_dash="dash", line_color="black", annotation_text="Objetivo 94%", annotation_position="top left")
+                fig_rank_q4.update_layout(yaxis=dict(range=[0, 110]), height=400, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_rank_q4, use_container_width=True)
+
+                st.subheader("Detalle de Objetivos - Cortesía")
+                st.dataframe(comp_q4.drop(columns=['Bar_Color']).style.map(lambda x: 'color: red; font-weight: bold' if '🚨' in str(x) else 'color: green', subset=['Acción']), 
                              use_container_width=True, hide_index=True)
 
 except Exception as e:
