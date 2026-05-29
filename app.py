@@ -29,7 +29,6 @@ def load_data(url, tipo_base):
             df["MARCA"] = df["MARCA"]
             df["Canal de Venta"] = df["CANAL DE VENTA"]
             df["Vendedor"] = df["VENDEDOR"]
-            # Para la interna, la pregunta de Recomendación actúa como el indicador principal comparable a Q2
             col_q1 = '1. Basándose en su experiencia de compra, ¿Recomendaría el Concesionario a Familiares y amigos?'
             col_q2 = '1. Basándose en su experiencia de compra, ¿Recomendaría el Concesionario a Familiares y amigos?'
         
@@ -40,7 +39,6 @@ def load_data(url, tipo_base):
             if val <= 6: return "Detractor"
             return "Sin Datos"
         
-        # Asegurar columnas estandarizadas de categorías para los botones de filtrado
         if col_q1 in df.columns:
             df['Cat_Q1'] = df[col_q1].apply(categorizar_nps)
         else:
@@ -109,16 +107,14 @@ def crear_grafico_torta(df, columna, titulo):
 
 # --- LÓGICA PRINCIPAL ---
 try:
-    # --- FILTRO ORIGEN DE DATOS (MULTICANAL) ---
+    # --- FILTRO ORIGEN DE DATOS ---
     st.sidebar.header("Fuente de Información")
     base_seleccionada = st.sidebar.radio(
         "Seleccione Origen de Encuestas",
         options=["Encuestas de Marca", "Encuestas Internas"]
     )
     
-    # Asignación dinámica de URL
     sheet_url = URL_MARCA if base_seleccionada == "Encuestas de Marca" else URL_INTERNA
-    
     df = load_data(sheet_url, base_seleccionada)
     
     if not df.empty:
@@ -139,12 +135,12 @@ try:
                 'q2': '1. Basándose en su experiencia de compra, ¿Recomendaría el Concesionario a Familiares y amigos?',
                 'q3': '8. Según tu experiencia, ¿qué aspectos te gustaron más y qué nos recomendarías mejorar?',
                 'q4': '2. ¿Cómo califica la cortesía y amabilidad del Vendedor / Asesor Comercial?',
-                'q5': '2. ¿Cómo califica la cortesía y amabilidad del Vendedor / Asesor Comercial?', # Usamos amabilidad como referencia secundaria en ranking unificado interno si no hay Q5 específica comercial
+                'q5': '2. ¿Cómo califica la cortesía y amabilidad del Vendedor / Asesor Comercial?', 
                 'lbl_q1': 'RECOMENDACIÓN (INTERNA)',
                 'lbl_q2': 'RECOMENDACIÓN (INTERNA)'
             }
 
-        # --- SIDEBAR (FILTROS DINÁMICOS) ---
+        # --- SIDEBAR (FILTROS GLOBALEs) ---
         st.sidebar.markdown("---")
         st.sidebar.header("Filtros Globales")
         df['Anio'] = df["Fecha de ultimo contacto"].dt.year
@@ -155,7 +151,7 @@ try:
         
         meses_n = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6: "Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
         meses_disp_nums = sorted(df[df['Anio'] == anio_sel]['Mes_Num'].unique())
-        meses_disp_nombres = [meses_n[m] for m in meses_disp_nums] if meses_disp_nums else ["Mayo"]
+        meses_disp_nombres = [meses_n[m] for m in meses_disp_nums] if meses_disp_nums else ["Abril"]
         
         meses_sel_nombres = st.sidebar.multiselect("Seleccione Mes(es)", options=meses_disp_nombres, default=meses_disp_nombres[-1:])
         meses_sel_nums = [k for k, v in meses_n.items() if v in meses_sel_nombres]
@@ -193,7 +189,7 @@ try:
 
             c_q1, c_q2, c_tot = st.columns([2.2, 2.2, 0.6])
             with c_q1:
-                st.plotly_chart(crear_gauge_moderno(nps_q1, MAPA['lbl_q1']), use_container_width=True)
+                st.plotly_chart(crear_gauge_moderno(nps_q1, MAPA['lbl_q1']), use_container_width=True, key="gauge_global_q1")
                 col_b1, col_b2, col_b3 = st.columns(3)
                 if col_b1.button(f"🟢 {p_q1}\nProm", key="q1_p"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1", "Promotor"
@@ -205,7 +201,7 @@ try:
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1", "Detractor"
                     st.rerun()
             with c_q2:
-                st.plotly_chart(crear_gauge_moderno(nps_q2, MAPA['lbl_q2']), use_container_width=True)
+                st.plotly_chart(crear_gauge_moderno(nps_q2, MAPA['lbl_q2']), use_container_width=True, key="gauge_global_q2")
                 col_b4, col_b5, col_b6 = st.columns(3)
                 if col_b4.button(f"🟢 {p_q2}\nProm", key="q2_p"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2", "Promotor"
@@ -219,13 +215,12 @@ try:
             with c_tot:
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 st.metric("Muestra", t_q1)
-                if st.button("🔄 Ver\nTodos"): 
+                if st.button("🔄 Ver\nTodos", key="btn_ver_todos_global"): 
                     st.session_state.filtro_val = "Todos"
                     st.rerun()
 
             st.markdown("---")
             
-            # --- SUB-TABS SEGÚN EL TIPO DE ENCUESTA ---
             if base_seleccionada == "Encuestas de Marca":
                 stabs = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
                 with stabs[0]:
@@ -236,29 +231,29 @@ try:
                 with stabs[1]:
                     ct1, ct2 = st.columns(2)
                     ct1.metric("Q7 - NPS Test Drive", f"{calcular_nps_detallado(df_base['Q7 - Satisfacción Test Drive'])[0]:.1f}%")
-                    ct2.plotly_chart(crear_grafico_torta(df_base, 'Q6 - Ofrecimiento Test Drive', 'Q6 - Ofrecimiento TD'), use_container_width=True)
+                    st.plotly_chart(crear_grafico_torta(df_base, 'Q6 - Ofrecimiento Test Drive', 'Q6 - Ofrecimiento TD'), use_container_width=True, key="torta_td_marca")
                 with stabs[2]:
                     cf1, cf2 = st.columns(2)
                     cf1.metric("Q10 - NPS Financiación", f"{calcular_nps_detallado(df_base['Q10 - Satisfacción Financiación utilizada'])[0]:.1f}%")
-                    cf2.plotly_chart(crear_grafico_torta(df_base, 'Q9 - Financiación utilizada', 'Mix Financiación'), use_container_width=True)
+                    st.plotly_chart(crear_grafico_torta(df_base, 'Q9 - Financiación utilizada', 'Mix Financiación'), use_container_width=True, key="torta_fin_marca")
                 with stabs[3]:
                     ce1, ce2 = st.columns(2)
                     ce1.metric("Q11 - Momento Entrega", f"{calcular_nps_detallado(df_base['Q11 - Satisfacción Momento de la entrega'])[0]:.1f}%")
                     ce2.metric("Q13 - Entrega General", f"{calcular_nps_detallado(df_base['Q13 - Satisfacción Entrega General'])[0]:.1f}%")
             
-            else:  # Modulos dinámicos para Encuesta Interna
-                stabs = st.tabs(["🤝 Trato Comercial", "📦 Procesos y Entrega", "📞 Seguimiento Postventa"])
-                with stabs[0]:
+            else:  
+                stabs_int = st.tabs(["🤝 Trato Comercial", "📦 Procesos y Entrega", "📞 Seguimiento Postventa"])
+                with stabs_int[0]:
                     v1, v2 = st.columns(2)
                     v1.metric("Cortesía y Amabilidad (Preg. 2)", f"{calcular_nps_detallado(df_base['2. ¿Cómo califica la cortesía y amabilidad del Vendedor / Asesor Comercial?'])[0]:.1f}%")
-                    v2.plotly_chart(crear_grafico_torta(df_base, '3. ¿Le han ofrecido una prueba de manejo?', 'Mix Ofrecimiento Test Drive'), use_container_width=True)
-                with stabs[1]:
+                    st.plotly_chart(crear_grafico_torta(df_base, '3. ¿Le han ofrecido una prueba de manejo?', 'Mix Ofrecimiento Test Drive'), use_container_width=True, key="torta_td_interna")
+                with stabs_int[1]:
                     e1, e2 = st.columns(2)
                     e1.metric("Info Pre-entrega (Preg. 4)", f"{calcular_nps_detallado(df_base['4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo? (Comunicación y explicación de tramites administrativos)'])[0]:.1f}%")
-                    e2.metric("Presentación 0KM (Preg. 5)", f"{calcular_nps_detallado(df_base['5. ¿Cómo califica la presentación de su 0KM al momento de la entrega? (explicaciones de las características, la limpieza y la presentación con el vehículo, entre otros aspects.)'])[0]:.1f}%")
-                with stabs[2]:
+                    e2.metric("Presentación 0KM (Preg. 5)", f"{calcular_nps_detallado(df_base['5. ¿Cómo califica la presentación de su 0KM al momento de la entrega? (explicaciones de las características, la limpieza y la presentación con el vehículo, entre otros aspectos.)'])[0]:.1f}%")
+                with stabs_int[2]:
                     p1, p2 = st.columns(2)
-                    p1.plotly_chart(crear_grafico_torta(df_base, '6. ¿Recibió un contacto del concesionario posterior a la entrega de su vehículo? (vía whatsapp, sms, correo o llamado)', 'Contacto Postventa Realizado'), use_container_width=True)
+                    st.plotly_chart(crear_grafico_torta(df_base, '6. ¿Recibió un contacto del concesionario posterior a la entrega de su vehículo? (vía whatsapp, sms, correo o llamado)', 'Contacto Postventa Realizado'), use_container_width=True, key="torta_post_interna")
                     p2.metric("Satisfacción Contacto (Preg. 7)", f"{calcular_nps_detallado(df_base['7. ¿Cuán satisfecho se encuentra con el contacto posterior realizado por el concesionario?'])[0]:.1f}%")
 
             st.markdown("---")
@@ -318,8 +313,8 @@ try:
             
             vendedores_disponibles = sorted(df_base["Vendedor"].dropna().unique())
             if vendedores_disponibles:
-                vendedor_sel = st.selectbox("Seleccione el Asesor a Evaluar", options=vendedores_disponibles)
-                df_vend = df_base[df_base["Vendedor"] == seller_sel if 'seller_sel' in locals() else df_base["Vendedor"] == vendedor_sel]
+                vendedor_sel = st.selectbox("Seleccione el Asesor a Evaluar", options=vendedores_disponibles, key="select_vendedor_individual")
+                df_vend = df_base[df_base["Vendedor"] == vendedor_sel]
                 
                 # --- CÁLCULO DE ALERTAS MES CONTRA MES (TENDENCIA) ---
                 df_vend_full = df[(df["Vendedor"] == vendedor_sel) & (df["MARCA"].isin(marcas)) & (df["Canal de Venta"].isin(canales))].copy()
@@ -370,7 +365,7 @@ try:
                     fig_linea.add_hline(y=94, line_dash="dash", line_color="green", annotation_text="Objetivo 94%")
                     fig_linea.update_traces(textposition="top center", line=dict(color='#007bff', width=3))
                     fig_linea.update_layout(yaxis=dict(range=[-10, 110]), height=300, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig_linea, use_container_width=True, key="grafico_evolucion_vendedor_master")
+                    st.plotly_chart(fig_linea, use_container_width=True, key="grafico_evolucion_vendedor_master_final")
                 else:
                     st.info("Sin historial suficiente para trazar línea de tiempo.")
                 
