@@ -92,7 +92,7 @@ def crear_gauge_moderno(valor, titulo):
     return fig
 
 def crear_grafico_torta(df, columna_o_keyword, titulo):
-    # Buscador flexible de columnas por palabra clave para evitar descalces por espacios o tildes
+    # Buscador flexible de columnas por palabra clave para evitar descalces
     columna_real = None
     for col in df.columns:
         if columna_o_keyword.lower() in col.lower():
@@ -115,14 +115,13 @@ def crear_grafico_torta(df, columna_o_keyword, titulo):
     conteo = df_torta[columna_real].value_counts().reset_index()
     conteo.columns = ['Respuesta', 'Cantidad']
     
-    # Normalización universal de variaciones afirmativas (SI / SÍ / SÍ, SE OFRECIÓ)
+    # Normalización universal de variaciones afirmativas/contactos
     conteo['Respuesta'] = conteo['Respuesta'].replace({'SÍ': 'SI', 'SÍ, SE OFRECIÓ': 'SI', 'CONTACTADO': 'SI'})
     conteo['Respuesta'] = conteo['Respuesta'].replace({'NO CONTACTADO': 'NO'})
     
     total_respuestas = conteo['Cantidad'].sum()
     
-    # Intentamos calcular la porción dominante positiva para la métrica central de la dona
-    # Si no es binario (SI/NO), tomará la categoría más repetida por defecto
+    # Intentamos calcular la porción dominante positiva para la métrica central
     if 'SI' in conteo['Respuesta'].values:
         cant_centro = conteo[conteo['Respuesta'] == 'SI']['Cantidad'].sum()
         label_centro = "Sí"
@@ -200,9 +199,9 @@ try:
                 'q3': 'COMENTARIO DEL CLIENTE',
                 'q4': '2. ¿Cómo califica la cortesía y amabilidad del Vendedor / Asesor Comercial?',
                 'q5': None,
-                'q6': 'prueba de manejo',
-                'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo?',
-                'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega?',
+                'q6': '3. ¿Le han ofrecido una prueba de manejo?',
+                'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo? (Comunicación y explicación de tramites administrativos)',
+                'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega? (explicaciones de las características, la limpieza y la presentación con el vehículo, entre otros aspectos.)',
                 'q14': 'contacto del concesionario posterior', 
                 'q15': '7. ¿Cuán satisfecho se encuentra con el contacto posterior realizado por el concesionario?',
                 'lbl_q1': 'CSI GENERAL (PROMEDIO %)',
@@ -295,7 +294,6 @@ try:
             st.markdown("---")
             
             if base_seleccionada == "Encuestas de Marca":
-                # APLICACIÓN DE DONAS UNIFICADAS PARA ENCUESTAS DE MARCA
                 stabs = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
                 with stabs[0]:
                     v1, v2 = st.columns(2)
@@ -304,17 +302,19 @@ try:
                 with stabs[1]:
                     ct1, ct2 = st.columns(2)
                     ct1.metric("Q7 - Satisfacción Test Drive", f"{calcular_nps_detallado(df_base['Q7 - Satisfacción Test Drive'])[0]:.1f}%")
-                    # Nueva Dona de Estado para Test Drive de Marca
-                    st.plotly_chart(crear_grafico_torta(df_base, MAPA['q6'], 'Q6 - Ofrecimiento Test Drive (Dona de Estado)'), use_container_width=True, key="pie_td_m_donut")
+                    # NUEVA DONA DE ESTADO - Q6 TEST DRIVE MARCA
+                    st.plotly_chart(crear_grafico_torta(df_base, MAPA['q6'], 'Q6 - Ofrecimiento Test Drive (Dona Target)'), use_container_width=True, key="pie_td_m_final")
                 with stabs[2]:
                     cf1, cf2 = st.columns(2)
                     cf1.metric("Q10 - Satisfacción Financiación", f"{calcular_nps_detallado(df_base['Q10 - Satisfacción Financiación utilizada'])[0]:.1f}%")
-                    # Nueva Dona de Estado para Mix de Financiación de Marca
-                    st.plotly_chart(crear_grafico_torta(df_base, 'Q9 - Financiación utilizada', 'Mix Ventas Financiadas (Dona de Estado)'), use_container_width=True, key="pie_fin_m_donut")
+                    # NUEVA DONA DE ESTADO - Q9 FINANZAS MARCA
+                    st.plotly_chart(crear_grafico_torta(df_base, 'Q9 - Financiación utilizada', 'Mix Ventas Financiadas (Dona Target)'), use_container_width=True, key="pie_fin_m_final")
                 with stabs[3]:
                     ce1, ce2 = st.columns(2)
                     ce1.metric("Q8 - Info Pre-entrega", f"{calcular_nps_detallado(df_base[MAPA['q8']])[0]:.1f}%")
                     ce2.metric("Q11 - Momento de la entrega", f"{calcular_nps_detallado(df_base[MAPA['q11']])[0]:.1f}%")
+                    # NUEVA DONA DE ESTADO - Q14 CONTACTADO MARCA
+                    st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Q14 - Contactado Posterior (Dona Target)'), use_container_width=True, key="pie_contacto_m_final")
             else:
                 stabs_int = st.tabs(["🤝 Gestión Comercial", "📦 Procesos y Entrega", "📞 Contacto posterior"])
                 with stabs_int[0]:
