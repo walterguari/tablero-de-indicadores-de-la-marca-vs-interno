@@ -58,6 +58,7 @@ def calcular_csi_directo_porcentaje(serie):
     serie_limpia = limpiar_comas_a_numerico(serie).dropna()
     total = len(serie_limpia)
     if total == 0: return 0.0, 0
+    # Convierte el promedio de la columna CSI (escala 1-10) a escala % (1-100)
     promedio_porcentaje = (serie_limpia.mean()) * 10
     return promedio_porcentaje, total
 
@@ -90,42 +91,32 @@ def crear_gauge_moderno(valor, titulo):
     fig.update_layout(height=230, margin=dict(l=30, r=30, t=40, b=0), paper_bgcolor='rgba(0,0,0,0)')
     return fig
 
-def crear_grafico_torta(df, columna_o_keyword, titulo):
-    # Buscador flexible de columnas por palabra clave
-    columna_real = None
-    for col in df.columns:
-        if columna_o_keyword.lower() in col.lower():
-            columna_real = col
-            break
-            
-    if not columna_real: 
-        fig = go.Figure()
-        fig.update_layout(title=titulo, annotations=[dict(text=f"No se encontró la columna", showarrow=False, font=dict(size=12))])
-        return fig
+def crear_grafico_torta(df, columna, titulo):
+    if columna not in df.columns: 
+        return go.Figure()
     
-    df_torta = df[[columna_real]].dropna().copy()
-    df_torta[columna_real] = df_torta[columna_real].astype(str).str.strip().str.upper()
+    # Copia explícita para evitar advertencias de asignación y limpieza de nulos
+    df_torta = df[[columna]].dropna().copy()
+    df_torta[columna] = df_torta[columna].astype(str).str.strip().str.upper()
     
     if df_torta.empty:
         fig = go.Figure()
-        fig.update_layout(title=titulo, annotations=[dict(text="Sin respuestas válidas", showarrow=False, font=dict(size=13))])
+        fig.update_layout(title=titulo, annotations=[dict(text="Sin datos válidos", showarrow=False, font=dict(size=13))])
         return fig
         
-    conteo = df_torta[columna_real].value_counts().reset_index()
-    conteo.columns = ['Respuesta', 'Cantidad']
+    conteo = df_torta[columna].value_counts().reset_index()
+    conteo.columns = [columna, 'Cantidad']
     
-    # Asegura compatibilidad con variaciones comunes
-    conteo['Respuesta'] = conteo['Respuesta'].replace({'SÍ': 'SI', 'Sí': 'SI', 'No': 'NO'})
-    
-    colores_map = {'SI': '#28a745', 'NO': '#dc3545'}
+    # Paleta limpia institucional: SI (Verde), NO (Rojo)
+    colores_map = {'SI': '#28a745', 'SÍ': '#28a745', 'NO': '#dc3545'}
     
     fig = px.pie(
         conteo, 
         values='Cantidad', 
-        names='Respuesta', 
+        names=columna, 
         title=titulo, 
         hole=0.4,
-        color='Respuesta',
+        color=columna,
         color_discrete_map=colores_map
     )
     fig.update_traces(textinfo='percent+label+value', textposition='inside')
@@ -144,6 +135,7 @@ try:
     df = load_data(sheet_url, base_seleccionada)
     
     if not df.empty:
+        # --- MAPEO DINÁMICO DE COLUMNAS VALIDADO ---
         if base_seleccionada == "Encuestas de Marca":
             MAPA = {
                 'q1': 'Q1 - Satisfacción general',
@@ -151,10 +143,10 @@ try:
                 'q3': 'Q3 - Verbalización',
                 'q4': 'Q4 - Cortesía y amabilidad',
                 'q5': 'Q5 - Competencia Vendedor',
-                'q6': 'Ofrecimiento Test Drive',
+                'q6': 'Q6 - Ofrecimiento Test Drive',
                 'q8': 'Q8 - Satisfacción información entre compra y entrega',
                 'q11': 'Q11 - Satisfacción Momento de la entrega',
-                'q14': 'Contactado',
+                'q14': 'Q14 - Contactado',
                 'q15': 'Q15 - Satisfacción con el Contacto',
                 'lbl_q1': 'Q1 - SATISFACCIÓN (NPS)',
                 'lbl_q2': 'Q2 - RECOMENDACIÓN (NPS)'
@@ -172,14 +164,15 @@ try:
                 'q3': 'COMENTARIO DEL CLIENTE',
                 'q4': '2. ¿Cómo califica la cortesía y amabilidad del Vendedor / Asesor Comercial?',
                 'q5': None,
-                'q6': 'prueba de manejo',
-                'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo?',
-                'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega?',
-                'q14': 'contacto del concesionario posterior', # Búsqueda inteligente por keyword
+                'q6': '3. ¿Le han ofrecido una prueba de manejo?',
+                'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo? (Comunicación y explicación de tramites administrativos)',
+                'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega? (explicaciones de las características, la limpieza y la presentación con el vehículo, entre otros aspectos.)',
+                'q14': '6. ¿Recibió un contacto del concesionario posterior a la entrega de su vehículo? (vía whatsapp, sms, correo o llamado)',
                 'q15': '7. ¿Cuán satisfecho se encuentra con el contacto posterior realizado por el concesionario?',
                 'lbl_q1': 'CSI GENERAL (PROMEDIO %)',
                 'lbl_q2': '1. RECOMENDACIÓN (NPS)'
             }
+            # Reglas del semáforo CSI para la tabla e indicadores internos
             serie_csi_limpia = limpiar_comas_a_numerico(df[MAPA['q1']])
             def categorizar_interna(v):
                 if pd.isna(v): return "Sin Datos"
@@ -254,7 +247,7 @@ try:
             with c_q2:
                 st.plotly_chart(crear_gauge_moderno(nps_q2, MAPA['lbl_q2']), use_container_width=True, key="gauge_autociel_q2")
                 col_b4, col_b5, col_b6 = st.columns(3)
-                if col_b4.button(f"🟢 {p_q2} Muest", key="btn_f_q2_p"): pass
+                if col_b4.button(f"🟢 {p_q2} Muest", key="btn_f_q2_p"): st.info("Filtro rápido controlado por los botones del CSI izquierdo."); pass
                 if col_b5.button(f"🟡 {n_q2} Muest", key="btn_f_q2_n"): pass
                 if col_b6.button(f"🔴 {d_q2} Muest", key="btn_f_q2_d"): pass
             with c_tot:
@@ -285,7 +278,7 @@ try:
                     ce1.metric("Q8 - Info Pre-entrega", f"{calcular_nps_detallado(df_base[MAPA['q8']])[0]:.1f}%")
                     ce2.metric("Q11 - Momento de la entrega", f"{calcular_nps_detallado(df_base[MAPA['q11']])[0]:.1f}%")
             else:
-                # SOLAPA INTERNA CON COINCIDENCIA ROBUSTA
+                # SOLAPA INTERNA TOTALMENTE CORREGIDA POR WALTER
                 stabs_int = st.tabs(["🤝 Gestión Comercial", "📦 Procesos y Entrega", "📞 Contacto posterior"])
                 with stabs_int[0]:
                     v1, v2 = st.columns(2)
@@ -306,7 +299,7 @@ try:
                     p1, p2 = st.columns(2)
                     val_p7_int, _ = calcular_csi_directo_porcentaje(df_base[MAPA['q15']])
                     with p1:
-                        # Mandamos la palabra clave en vez del texto largo exacto
+                        # Forzamos la lectura limpia de la columna de texto q14 directamente para evitar herencias
                         st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Preg. 6 - Recepción de Contacto Post-Entrega'), use_container_width=True, key="pie_contacto_posterior_f")
                     with p2:
                         st.plotly_chart(crear_gauge_moderno(val_p7_int, "Preg. 7 - Satisfacción con el contacto posterior"), use_container_width=True, key="gauge_p7_int_sub")
@@ -329,16 +322,14 @@ try:
         # ==========================================================
         with tab_unificada:
             st.header("Ranking de Performance por Asesor Comercial")
+            st.markdown("Hacé clic en cualquier cabecera para ordenar la lista según el indicador deseado.")
             
             if not df_base.empty:
                 resumen_master = []
                 for vend, data in df_base.groupby("Vendedor"):
                     n_q2, p_q2, _, d_q2, t_q2 = calcular_nps_detallado(data[MAPA['q2']])
                     n_q4, _, _, _, _ = calcular_nps_detallado(data[MAPA['q4']])
-                    
-                    # Para evitar fallas por títulos parciales en el loop secundario
-                    col_q8_real = [c for c in data.columns if "información facilitada" in c.lower() or "info pre-entrega" in c.lower()]
-                    n_q8 = calcular_nps_detallado(data[col_q8_real[0]])[0] if col_q8_real else 0.0
+                    n_q8, _, _, _, _ = calcular_nps_detallado(data[MAPA['q8']])
                     
                     resumen_master.append({
                         "Asesor Comercial": vend,
@@ -390,9 +381,7 @@ try:
                 
                 v_q2, pv2, _, dv2, tv2 = calcular_nps_detallado(df_vend[MAPA['q2']])
                 v_q4, _, _, _, _ = calcular_nps_detallado(df_vend[MAPA['q4']])
-                
-                col_q8_real = [c for c in df_vend.columns if "información facilitada" in c.lower() or "info pre-entrega" in c.lower()]
-                v_q8 = calcular_nps_detallado(df_vend[col_q8_real[0]])[0] if col_q8_real else 0.0
+                v_q8, _, _, _, _ = calcular_nps_detallado(df_vend[MAPA['q8']])
                 
                 alerta_q2 = ""
                 if len(df_evolucion) >= 2:
@@ -440,6 +429,8 @@ try:
                     use_container_width=True, 
                     hide_index=True
                 )
+            else:
+                st.warning("No se encontraron asesores comerciales para estos filtros.")
 
 except Exception as e:
     st.error(f"Error en la ejecución del Tablero Autociel: {e}")
