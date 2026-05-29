@@ -44,9 +44,9 @@ def calcular_nps_detallado(serie):
 def calcular_faltante_94(promotores, detractores, total):
     if total == 0: return "Sin datos"
     nps_actual = ((promotores - detractores) / total) * 100
-    if nps_actual >= 94: return "✅ Objetivo cumplido."
+    if nps_actual >= 94: return "✅ Objetivo"
     x = (0.94 * total + detractores - promotores) / (1 - 0.94)
-    return f"🚨 Faltan {math.ceil(x)} encuestas (9-10) para el 94%"
+    return f"🚨 Faltan {math.ceil(x)}"
 
 def get_bar_color(val):
     if val >= 94: return '#28a745'
@@ -115,12 +115,11 @@ try:
 
         st.title("📊 Gestión de Calidad - Grupo Cenoa")
         
-        # Definición de las 4 pestañas principales
-        tab_global, tab_vendedores, tab_cortesia, tab_competencia = st.tabs([
+        # DEFINICIÓN DE PESTAÑAS (Optimizadas y Unificadas)
+        tab_global, tab_unificada, tab_individual = st.tabs([
             "🏠 Monitor Global", 
-            "👤 Rendimiento por Vendedor (Q2)", 
-            "🤝 Cortesía por Vendedor (Q4)",
-            "🧠 Competencia por Vendedor (Q5)"
+            "👥 Tabla Unificada de Asesores", 
+            "👤 Ficha Individual por Asesor"
         ])
 
         if 'filtro_col' not in st.session_state: st.session_state.filtro_col = "Cat_Q1"
@@ -198,104 +197,129 @@ try:
             st.dataframe(df_v[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Vendedor"]], use_container_width=True, hide_index=True)
 
         # ==========================================================
-        # TAB: RENDIMIENTO POR VENDEDOR (Q2)
+        # TAB 2: TABLA MASTER UNIFICADA (MEJORAS 3 Y 4)
         # ==========================================================
-        with tab_vendedores:
-            st.header("Ranking y Objetivos por Asesor (Q2 - Recomendación)")
+        with tab_unificada:
+            st.header("Ranking Ejecutivo Unificado (Q2, Q4, Q5)")
+            st.markdown("Consolidado interactivo de asesores comerciales. Podés hacer clic en los encabezados para ordenar por cualquier indicador.")
+            
             if not df_base.empty:
-                resumen = []
+                resumen_master = []
                 for vend, data in df_base.groupby("Vendedor"):
-                    nv, pv, nev, dv, tv = calcular_nps_detallado(data["Q2 - Recomendación - Concesionario"])
-                    resumen.append({"Vendedor": vend, "NPS Q2 %": nv, "Cant.": tv, "Acción": calcular_faltante_94(pv, dv, tv)})
-                comp = pd.DataFrame(resumen).sort_values("NPS Q2 %", ascending=False)
-                
-                comp['Bar_Color'] = comp['NPS Q2 %'].apply(get_bar_color)
-                
-                fig_rank = go.Figure(go.Bar(
-                    x=comp["Vendedor"],
-                    y=comp["NPS Q2 %"],
-                    text=comp["NPS Q2 %"].round(1).astype(str) + "%",
-                    textposition='outside',
-                    marker_color=comp['Bar_Color']
-                ))
-                fig_rank.add_hline(y=94, line_dash="dash", line_color="black", annotation_text="Objetivo 94%", annotation_position="top left")
-                fig_rank.update_layout(yaxis=dict(range=[0, 110]), height=400, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                # Solución: Añadimos key única "chart_q2"
-                st.plotly_chart(fig_rank, use_container_width=True, key="chart_q2")
-
-                st.subheader("Detalle de Objetivos")
-                st.dataframe(comp.drop(columns=['Bar_Color']).style.map(lambda x: 'color: red; font-weight: bold' if '🚨' in str(x) else 'color: green', subset=['Acción']), 
-                             use_container_width=True, hide_index=True)
-
-        # ==========================================================
-        # TAB: CORTESÍA POR VENDEDOR (Q4)
-        # ==========================================================
-        with tab_cortesia:
-            st.header("Ranking de Cortesía y Amabilidad por Asesor (Q4)")
-            if not df_base.empty:
-                resumen_q4 = []
-                for vend, data in df_base.groupby("Vendedor"):
-                    nv_q4, pv_q4, nev_q4, dv_q4, tv_q4 = calcular_nps_detallado(data["Q4 - Cortesía y amabilidad"])
-                    resumen_q4.append({
-                        "Vendedor": vend, 
-                        "NPS Cortesía %": nv_q4, 
-                        "Encuestas": tv_q4, 
-                        "Acción": calcular_faltante_94(pv_q4, dv_q4, tv_q4)
+                    n_q2, p_q2, _, d_q2, t_q2 = calcular_nps_detallado(data["Q2 - Recomendación - Concesionario"])
+                    n_q4, _, _, _, _ = calcular_nps_detallado(data["Q4 - Cortesía y amabilidad"])
+                    n_q5, _, _, _, _ = calcular_nps_detallado(data["Q5 - Competencia Vendedor"])
+                    
+                    resumen_master.append({
+                        "Vendedor": vend,
+                        "NPS Recomendación (Q2)": round(n_q2, 1),
+                        "Faltante Obj. Q2": calcular_faltante_94(p_q2, d_q2, t_q2),
+                        "NPS Cortesía (Q4)": round(n_q4, 1),
+                        "NPS Competencia (Q5)": round(n_q5, 1),
+                        "Encuestas Recibidas": t_q2
                     })
                 
-                comp_q4 = pd.DataFrame(resumen_q4).sort_values("NPS Cortesía %", ascending=False)
-                comp_q4['Bar_Color'] = comp_q4['NPS Cortesía %'].apply(get_bar_color)
+                df_master = pd.DataFrame(resumen_master).sort_values("NPS Recomendación (Q2)", ascending=False)
                 
-                fig_rank_q4 = go.Figure(go.Bar(
-                    x=comp_q4["Vendedor"],
-                    y=comp_q4["NPS Cortesía %"],
-                    text=comp_q4["NPS Cortesía %"].round(1).astype(str) + "%",
-                    textposition='outside',
-                    marker_color=comp_q4['Bar_Color']
-                ))
-                fig_rank_q4.add_hline(y=94, line_dash="dash", line_color="black", annotation_text="Objetivo 94%", annotation_position="top left")
-                fig_rank_q4.update_layout(yaxis=dict(range=[0, 110]), height=400, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                # Solución: Añadimos key única "chart_q4"
-                st.plotly_chart(fig_rank_q4, use_container_width=True, key="chart_q4")
+                # Formato visual condicional (Estilo BI / Semáforos)
+                def color_celda_nps(val):
+                    try:
+                        v = float(val)
+                        if v >= 94: return 'background-color: #d4edda; color: #155724; font-weight: bold'
+                        if v >= 90: return 'background-color: #fff3cd; color: #856404; font-weight: bold'
+                        return 'background-color: #f8d7da; color: #721c24; font-weight: bold'
+                    except:
+                        return ''
 
-                st.subheader("Detalle de Objetivos - Cortesía")
-                st.dataframe(comp_q4.drop(columns=['Bar_Color']).style.map(lambda x: 'color: red; font-weight: bold' if '🚨' in str(x) else 'color: green', subset=['Acción']), 
-                             use_container_width=True, hide_index=True)
+                df_styled = df_master.style.map(color_celda_nps, subset=["NPS Recomendación (Q2)", "NPS Cortesía (Q4)", "NPS Competencia (Q5)"])\
+                                           .map(lambda x: 'color: #721c24; font-weight: bold' if '🚨' in str(x) else 'color: #155724', subset=['Faltante Obj. Q2'])
+                
+                st.dataframe(df_styled, use_container_width=True, hide_index=True)
 
         # ==========================================================
-        # TAB: COMPETENCIA POR VENDEDOR (Q5)
+        # TAB 3: FICHA INDIVIDUAL POR ASESOR (MEJORAS 1 Y 2)
         # ==========================================================
-        with tab_competencia:
-            st.header("Ranking de Competencia del Vendedor por Asesor (Q5)")
-            if not df_base.empty:
-                resumen_q5 = []
-                for vend, data in df_base.groupby("Vendedor"):
-                    nv_q5, pv_q5, nev_q5, dv_q5, tv_q5 = calcular_nps_detallado(data["Q5 - Competencia Vendedor"])
-                    resumen_q5.append({
-                        "Vendedor": vend, 
-                        "NPS Competencia %": nv_q5, 
-                        "Encuestas": tv_q5, 
-                        "Acción": calcular_faltante_94(pv_q5, dv_q5, tv_q5)
-                    })
+        with tab_individual:
+            st.header("Análisis de Evolución por Asesor Comercial")
+            
+            # Filtro para elegir un vendedor específico
+            vendedores_disponibles = sorted(df_base["Vendedor"].dropna().unique())
+            if vendedores_disponibles:
+                vendedor_sel = st.selectbox("Seleccione el Asesor a Evaluar", options=vendedores_disponibles)
                 
-                comp_q5 = pd.DataFrame(resumen_q5).sort_values("NPS Competencia %", ascending=False)
-                comp_q5['Bar_Color'] = comp_q5['NPS Competencia %'].apply(get_bar_color)
+                # Datos del vendedor actual filtrados por marca y canal de arriba
+                df_vend = df_base[df_base["Vendedor"] == vendedor_sel]
                 
-                fig_rank_q5 = go.Figure(go.Bar(
-                    x=comp_q5["Vendedor"],
-                    y=comp_q5["NPS Competencia %"],
-                    text=comp_q5["NPS Competencia %"].round(1).astype(str) + "%",
-                    textposition='outside',
-                    marker_color=comp_q5['Bar_Color']
-                ))
-                fig_rank_q5.add_hline(y=94, line_dash="dash", line_color="black", annotation_text="Objetivo 94%", annotation_position="top left")
-                fig_rank_q5.update_layout(yaxis=dict(range=[0, 110]), height=400, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                # Solución: Añadimos key única "chart_q5"
-                st.plotly_chart(fig_rank_q5, use_container_width=True, key="chart_q5")
+                # --- CÁLCULO DE ALERTAS MES CONTRA MES (MEJORA 2) ---
+                # Conseguimos todo el historial temporal de este vendedor para evaluar tendencia
+                df_vend_full = df[(df["Vendedor"] == vendedor_sel) & (df["MARCA"].isin(marcas)) & (df["Canal de Venta"].isin(canales))].copy()
+                df_vend_full["Periodo"] = df_vend_full["Fecha de ultimo contacto"].dt.to_period("M")
+                
+                resumen_mensual = []
+                for per, data_m in df_vend_full.groupby("Periodo"):
+                    n_m, _, _, _, _ = calcular_nps_detallado(data_m["Q2 - Recomendación - Concesionario"])
+                    resumen_mensual.append({"Periodo_Str": str(per), "Periodo": per, "NPS Q2": n_m})
+                
+                df_evolucion = pd.DataFrame(resumen_mensual).sort_values("Periodo")
+                
+                # Metricas clave con flecha de tendencia
+                st.markdown(f"### Desempeño Actual de: **{vendedor_sel}**")
+                
+                v_q2, pv2, _, dv2, tv2 = calcular_nps_detallado(df_vend["Q2 - Recomendación - Concesionario"])
+                v_q4, _, _, _, _ = calcular_nps_detallado(df_vend["Q4 - Cortesía y amabilidad"])
+                v_q5, _, _, _, _ = calcular_nps_detallado(df_vend["Q5 - Competencia Vendedor"])
+                
+                # Determinar flechas de tendencia comparando el último periodo contra el anterior
+                alerta_q2 = ""
+                if len(df_evolucion) >= 2:
+                    ultimo_nps = df_evolucion.iloc[-1]["NPS Q2"]
+                    anterior_nps = df_evolucion.iloc[-2]["NPS Q2"]
+                    if ultimo_nps > anterior_nps:
+                        alerta_q2 = f"⬆️ (+{ultimo_nps - anterior_nps:.1f}% vs mes ant.)"
+                    elif ultimo_nps < anterior_nps:
+                        alerta_q2 = f"⬇️ ({ultimo_nps - anterior_nps:.1f}% vs mes ant.)"
+                    else:
+                        alerta_q2 = "➡️ (Sin cambios)"
 
-                st.subheader("Detalle de Objetivos - Competencia Vendedor")
-                st.dataframe(comp_q5.drop(columns=['Bar_Color']).style.map(lambda x: 'color: red; font-weight: bold' if '🚨' in str(x) else 'color: green', subset=['Acción']), 
-                             use_container_width=True, hide_index=True)
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("NPS Recomendación (Q2)", f"{v_q2:.1f}%", help="Métrica principal de recomendación")
+                m2.metric("Tendencia Q2", alerta_q2 if alerta_q2 else "Muestra inicial", delta_color="off")
+                m3.metric("NPS Cortesía (Q4)", f"{v_q4:.1f}%")
+                m4.metric("NPS Competencia (Q5)", f"{v_q5:.1f}%")
+                
+                # --- GRÁFICO DE LÍNEAS TEMPORAL (MEJORA 1) ---
+                st.markdown("---")
+                st.subheader("📈 Evolución Histórica Mensual (NPS Q2)")
+                if not df_evolucion.empty:
+                    fig_linea = px.line(
+                        df_evolucion, 
+                        x="Periodo_Str", 
+                        y="NPS Q2", 
+                        text=df_evolucion["NPS Q2"].round(1).astype(str) + "%",
+                        labels={"Periodo_Str": "Mes de Contacto", "NPS Q2": "NPS Recomendación %"},
+                        markers=True
+                    )
+                    fig_linea.add_hline(y=94, line_dash="dash", line_color="green", annotation_text="Objetivo Cenoa (94%)")
+                    fig_linea.update_traces(textposition="top center", line=dict(color='#007bff', width=3))
+                    fig_linea.update_layout(yaxis=dict(range=[-10, 110]), height=320, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    st.plotly_chart(fig_linea, use_container_width=True, key="grafico_evolucion_vendedor")
+                else:
+                    st.info("Sin historial suficiente para trazar línea de tiempo.")
+                
+                # --- EXCLUSIVO VERBALIZACIONES DEL ASESOR ---
+                st.markdown("---")
+                st.subheader(f"💬 Comentarios de Clientes asignados a {vendedor_sel}")
+                df_v_individual = df_vend[["Fecha de ultimo contacto", "Nombre de cliente", "Q3 - Verbalización", "Q2 - Recomendación - Concesionario"]].copy()
+                df_v_individual = df_v_individual.sort_values("Fecha de ultimo contacto", ascending=False)
+                df_v_individual["Fecha de ultimo contacto"] = df_v_individual["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
+                
+                st.dataframe(
+                    df_v_individual.rename(columns={"Q2 - Recomendación - Concesionario": "Nota Q2"}), 
+                    use_container_width=True, 
+                    hide_index=True
+                )
+            else:
+                st.warning("No se encontraron asesores con los filtros seleccionados.")
 
 except Exception as e:
-    st.error(f"Error crítico: {e}")
+    st.error(f"Error crítico en la ejecución del tablero: {e}")
