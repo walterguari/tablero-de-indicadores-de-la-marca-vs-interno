@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -32,17 +32,18 @@ def load_data(url, tipo_base):
             col_q1 = '1. Basándose en su experiencia de compra, ¿Recomendaría el Concesionario a Familiares y amigos?'
             col_q2 = '1. Basándose en su experiencia de compra, ¿Recomendaría el Concesionario a Familiares y amigos?'
             
-            # Protección por si "Nombre de cliente" no se llama exactamente así en la interna
-            if "Nombre de cliente" not in df.columns:
-                posibles_columnas_cliente = ["Cliente", "Nombre", "NOMBRE", "CLIENTE", "Nombre y Apellido"]
-                col_encontrada = False
-                for col in posibles_columnas_cliente:
-                    if col in df.columns:
-                        df["Nombre de cliente"] = df[col]
-                        col_encontrada = True
-                        break
-                if not col_encontrada:
-                    df["Nombre de cliente"] = "Anónimo"
+            # --- DETECTOR AUTOMÁTICO DE COLUMNA DE CLIENTE PARA LA BASE INTERNA ---
+            # Buscamos variantes comunes para evitar el error "not in index"
+            posibles_columnas = ["Nombre de cliente", "Cliente", "Nombre", "NOMBRE", "CLIENTE", "Nombre y Apellido", "Apellido y Nombre"]
+            col_encontrada = False
+            for col in posibles_columnas:
+                if col in df.columns:
+                    df["Nombre de cliente"] = df[col]
+                    col_encontrada = True
+                    break
+            if not col_encontrada:
+                # Si no encuentra ninguna, creamos la columna vacía con "Anónimo" para que el dataframe funcione igual
+                df["Nombre de cliente"] = "Anónimo"
         
         def categorizar_nps(val):
             val = pd.to_numeric(val, errors='coerce')
