@@ -58,7 +58,6 @@ def calcular_csi_directo_porcentaje(serie):
     serie_limpia = limpiar_comas_a_numerico(serie).dropna()
     total = len(serie_limpia)
     if total == 0: return 0.0, 0
-    # Convierte el promedio de la columna CSI (escala 1-10) a escala % (1-100)
     promedio_porcentaje = (serie_limpia.mean()) * 10
     return promedio_porcentaje, total
 
@@ -92,7 +91,6 @@ def crear_gauge_moderno(valor, titulo):
     return fig
 
 def crear_grafico_torta(df, columna_o_keyword, titulo):
-    # Buscador flexible de columnas por palabra clave para evitar errores por variaciones de texto
     columna_real = None
     for col in df.columns:
         if columna_o_keyword.lower() in col.lower():
@@ -101,7 +99,7 @@ def crear_grafico_torta(df, columna_o_keyword, titulo):
             
     if not columna_real: 
         fig = go.Figure()
-        fig.update_layout(title=titulo, annotations=[dict(text="No se encontró la columna en la planilla", showarrow=False, font=dict(size=12))])
+        fig.update_layout(title=titulo, annotations=[dict(text="Columna no encontrada", showarrow=False, font=dict(size=12))])
         return fig
     
     df_torta = df[[columna_real]].dropna().copy()
@@ -115,22 +113,38 @@ def crear_grafico_torta(df, columna_o_keyword, titulo):
     conteo = df_torta[columna_real].value_counts().reset_index()
     conteo.columns = ['Respuesta', 'Cantidad']
     
-    # Asegura compatibilidad total de ortografía y normaliza respuestas
-    conteo['Respuesta'] = conteo['Respuesta'].replace({'SÍ': 'SI', 'SÍ': 'SI', 'SI': 'SI'})
+    conteo['Respuesta'] = conteo['Respuesta'].replace({'SÍ': 'SI', 'Sí': 'SI', 'Sí': 'SI'})
+    total_respuestas = conteo['Cantidad'].sum()
+    
+    # Extraemos el porcentaje de "SI" para el centro estratégico de la dona
+    cant_si = conteo[conteo['Respuesta'] == 'SI']['Cantidad'].sum()
+    pct_si = (cant_si / total_respuestas) * 100 if total_respuestas > 0 else 0.0
     
     colores_map = {'SI': '#28a745', 'NO': '#dc3545'}
     
+    # Transformación a Torta tipo Dona Unificada de Estado (Donut Target Indicator)
     fig = px.pie(
         conteo, 
         values='Cantidad', 
         names='Respuesta', 
         title=titulo, 
-        hole=0.4,
+        hole=0.6, # Dona más cerrada para albergar el KPI central
         color='Respuesta',
         color_discrete_map=colores_map
     )
-    fig.update_traces(textinfo='percent+label+value', textposition='inside')
-    fig.update_layout(height=240, margin=dict(l=10, r=10, t=40, b=10), showlegend=False)
+    fig.update_traces(textinfo='percent+label', textposition='outside')
+    
+    # Anotación central gigante con el porcentaje de éxito limpio
+    fig.update_layout(
+        height=240, 
+        margin=dict(l=10, r=10, t=40, b=10), 
+        showlegend=False,
+        annotations=[dict(
+            text=f"<b>{pct_si:.1f}%</b><br><span style='font-size:11px;color:#777'>Sí</span>", 
+            showarrow=False, 
+            font=dict(size=24, color='#28a745')
+        )]
+    )
     return fig
 
 # --- LÓGICA PRINCIPAL ---
@@ -145,7 +159,6 @@ try:
     df = load_data(sheet_url, base_seleccionada)
     
     if not df.empty:
-        # --- MAPEO DINÁMICO DE COLUMNAS VALIDADO ---
         if base_seleccionada == "Encuestas de Marca":
             MAPA = {
                 'q1': 'Q1 - Satisfacción general',
@@ -153,10 +166,10 @@ try:
                 'q3': 'Q3 - Verbalización',
                 'q4': 'Q4 - Cortesía y amabilidad',
                 'q5': 'Q5 - Competencia Vendedor',
-                'q6': 'Q6 - Ofrecimiento Test Drive',
+                'q6': 'Ofrecimiento Test Drive',
                 'q8': 'Q8 - Satisfacción información entre compra y entrega',
                 'q11': 'Q11 - Satisfacción Momento de la entrega',
-                'q14': 'Q14 - Contactado',
+                'q14': 'Contactado',
                 'q15': 'Q15 - Satisfacción con el Contacto',
                 'lbl_q1': 'Q1 - SATISFACCIÓN (NPS)',
                 'lbl_q2': 'Q2 - RECOMENDACIÓN (NPS)'
@@ -174,15 +187,14 @@ try:
                 'q3': 'COMENTARIO DEL CLIENTE',
                 'q4': '2. ¿Cómo califica la cortesía y amabilidad del Vendedor / Asesor Comercial?',
                 'q5': None,
-                'q6': '3. ¿Le han ofrecido una prueba de manejo?',
-                'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo? (Comunicación y explicación de tramites administrativos)',
-                'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega? (explicaciones de las características, la limpieza y la presentación con el vehículo, entre otros aspectos.)',
-                'q14': 'contacto del concesionario posterior', # Palabra clave para la búsqueda flexible
+                'q6': 'prueba de manejo',
+                'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo?',
+                'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega?',
+                'q14': 'contacto del concesionario posterior', 
                 'q15': '7. ¿Cuán satisfecho se encuentra con el contacto posterior realizado por el concesionario?',
                 'lbl_q1': 'CSI GENERAL (PROMEDIO %)',
                 'lbl_q2': '1. RECOMENDACIÓN (NPS)'
             }
-            # Reglas del semáforo CSI para la tabla e indicadores internos
             serie_csi_limpia = limpiar_comas_a_numerico(df[MAPA['q1']])
             def categorizar_interna(v):
                 if pd.isna(v): return "Sin Datos"
@@ -288,7 +300,6 @@ try:
                     ce1.metric("Q8 - Info Pre-entrega", f"{calcular_nps_detallado(df_base[MAPA['q8']])[0]:.1f}%")
                     ce2.metric("Q11 - Momento de la entrega", f"{calcular_nps_detallado(df_base[MAPA['q11']])[0]:.1f}%")
             else:
-                # SOLAPA INTERNA TOTALMENTE CONFIGURADA Y ROBUSTA
                 stabs_int = st.tabs(["🤝 Gestión Comercial", "📦 Procesos y Entrega", "📞 Contacto posterior"])
                 with stabs_int[0]:
                     v1, v2 = st.columns(2)
@@ -309,7 +320,6 @@ try:
                     p1, p2 = st.columns(2)
                     val_p7_int, _ = calcular_csi_directo_porcentaje(df_base[MAPA['q15']])
                     with p1:
-                        # Mapeo usando la palabra clave de búsqueda flexible 'contacto del concesionario posterior'
                         st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Preg. 6 - Recepción de Contacto Post-Entrega'), use_container_width=True, key="pie_contacto_posterior_f")
                     with p2:
                         st.plotly_chart(crear_gauge_moderno(val_p7_int, "Preg. 7 - Satisfacción con el contacto posterior"), use_container_width=True, key="gauge_p7_int_sub")
