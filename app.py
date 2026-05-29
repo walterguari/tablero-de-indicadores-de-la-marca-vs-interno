@@ -11,6 +11,13 @@ URL_MARCA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5u
 URL_INTERNA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=1131519764"
 
 # --- FUNCIONES DE DATOS Y CÁLCULOS ---
+def limpiar_comas_a_numerico(serie):
+    """Convierte strings con comas a números flotantes legibles por Python"""
+    if serie is None or serie.empty:
+        return pd.Series(dtype=float)
+    # Reemplaza comas por puntos y fuerza la conversión a número
+    return pd.to_numeric(serie.astype(str).str.replace(',', '.'), errors='coerce')
+
 @st.cache_data(ttl=600)
 def load_data(url, tipo_base):
     try:
@@ -39,23 +46,21 @@ def load_data(url, tipo_base):
         return pd.DataFrame()
 
 def calcular_nps_detallado(serie):
-    if serie is None or serie.empty: return 0, 0, 0, 0, 0
-    serie = pd.to_numeric(serie, errors='coerce').dropna()
-    total = len(serie)
+    serie_limpia = limpiar_comas_a_numerico(serie).dropna()
+    total = len(serie_limpia)
     if total == 0: return 0, 0, 0, 0, 0
-    promotores = (serie >= 9).sum()
-    neutros = ((serie >= 7) & (serie <= 8)).sum()
-    detractores = (serie <= 6).sum()
+    promotores = (serie_limpia >= 9).sum()
+    neutros = ((serie_limpia >= 7) & (serie_limpia <= 8)).sum()
+    detractores = (serie_limpia <= 6).sum()
     nps = ((promotores - detractores) / total) * 100
     return nps, promotores, neutros, detractores, total
 
 def calcular_csi_directo_porcentaje(serie):
-    if serie is None or serie.empty: return 0.0, 0
-    serie = pd.to_numeric(serie, errors='coerce').dropna()
-    total = len(serie)
+    serie_limpia = limpiar_comas_a_numerico(serie).dropna()
+    total = len(serie_limpia)
     if total == 0: return 0.0, 0
     # Toma el promedio directo de la columna CSI (escala 1-10) y lo lleva a escala % (1-100)
-    promedio_porcentaje = (serie.mean()) * 10
+    promedio_porcentaje = (serie_limpia.mean()) * 10
     return promedio_porcentaje, total
 
 def calcular_faltante_94(promotores, detractores, total):
@@ -140,19 +145,20 @@ try:
                 'q5': None,
                 'q6': '3. ¿Le han ofrecido una prueba de manejo?',
                 'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo?',
-                'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega?',
+                'q11': '5. ¿Cómo califica la presentation de su 0KM al momento de la entrega?',
                 'q14': '6. ¿Recibió un contacto del concesionario posterior a la entrega de su vehículo?',
                 'q15': '7. ¿Cuán satisfecho se encuentra con el contacto posterior realizado por el concesionario?',
                 'lbl_q1': 'CSI GENERAL (PROMEDIO %)',
                 'lbl_q2': '1. RECOMENDACIÓN (NPS)'
             }
-            # REGLAS EXACTAS DE LA INTERNA PROPUESTAS POR WALTER
-            def categorizar_interna(val):
-                v = pd.to_numeric(val, errors='coerce')
+            # REGLAS EXACTAS DE LA INTERNA PROPUESTAS POR WALTER CON LIMPIEZA DE COMAS
+            serie_csi_limpia = limpiar_comas_a_numerico(df[MAPA['q1']])
+            def categorizar_interna(v):
+                if pd.isna(v): return "Sin Datos"
                 if v >= 9.0: return "Promotor"
                 if v >= 7.0: return "Neutro"
                 return "Detractor"
-            df['Cat_Filtro_Dinamica'] = df[MAPA['q1']].apply(categorizar_interna)
+            df['Cat_Filtro_Dinamica'] = serie_csi_limpia.apply(categorizar_interna)
 
         # --- SIDEBAR (FILTROS GLOBALES) ---
         st.sidebar.markdown("---")
@@ -200,8 +206,8 @@ try:
                 val_q1, p_q1, n_q1, d_q1, t_q1 = calcular_nps_detallado(df_base[MAPA['q1']])
             else:
                 val_q1, t_q1 = calcular_csi_directo_porcentaje(df_base[MAPA['q1']])
-                # Contamos promotores/neutros/detractores basados en el rango del CSI definido por Walter
-                serie_csi = pd.to_numeric(df_base[MAPA['q1']], errors='coerce').dropna()
+                # Contamos promotores/neutros/detractores basados en el rango del CSI definido por Walter con limpieza
+                serie_csi = limpiar_comas_a_numerico(df_base[MAPA['q1']]).dropna()
                 p_q1 = (serie_csi >= 9.0).sum()
                 n_q1 = ((serie_csi >= 7.0) & (serie_csi < 9.0)).sum()
                 d_q1 = (serie_csi < 7.0).sum()
@@ -260,7 +266,9 @@ try:
                 with stabs_int[1]:
                     e1, e2 = st.columns(2)
                     e1.metric("Preg. 4 - Calidad de Info Pre-entrega", f"{calcular_nps_detallado(df_base[MAPA['q8']])[0]:.1f}%")
-                    e2.metric("Preg. 5 - Presentación y Estado del 0KM", f"{calcular_nps_detallado(df_base[MAPA['q11']])[0]:.1f}%")
+                    # Manejo flexible por si en la hoja interna dice presentation u otra variación
+                    col_entrega_int = MAPA['q11'] if MAPA['q11'] in df_base.columns else '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega?'
+                    e2.metric("Preg. 5 - Presentación y Estado del 0KM", f"{calcular_nps_detallado(df_base[col_entrega_int])[0]:.1f}%")
                 with stabs_int[2]:
                     p1, p2 = st.columns(2)
                     st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Preg. 6 - Recepción de Contacto Post-Entrega'), use_container_width=True, key="pie_post_i")
