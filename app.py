@@ -49,14 +49,26 @@ def calcular_nps_detallado(serie):
     nps = ((promotores - detractores) / total) * 100
     return nps, promotores, neutros, detractores, total
 
-def calcular_csi_porcentaje(serie):
-    if serie is None or serie.empty: return 0.0, 0
-    serie = pd.to_numeric(serie, errors='coerce').dropna()
-    total = len(serie)
-    if total == 0: return 0.0, 0
-    # Promedio matemático llevado a escala 1-100% (multiplicado por 10)
-    promedio_porcentaje = (serie.mean()) * 10
-    return promedio_porcentaje, total
+def calcular_csi_porcentaje(df_filtrado, columnas_notas):
+    # Calcula el CSI promediando de forma limpia las columnas numéricas renglón por renglón
+    valores = pd.DataFrame()
+    for col in columnas_notas:
+        if col in df_filtrado.columns:
+            valores[col] = pd.to_numeric(df_filtrado[col], errors='coerce')
+    
+    if valores.empty:
+        return 0.0, 0
+    
+    # Promedio por fila, y luego promedio de toda la muestra
+    promedios_filas = valores.mean(axis=1, skipna=True).dropna()
+    total = len(promedios_filas)
+    
+    if total == 0:
+        return 0.0, 0
+        
+    # Convertimos la nota escala 1-10 a porcentaje (ej: 9.4 -> 94.0%)
+    promedio_general_porcentaje = promedios_filas.mean() * 10
+    return promedio_general_porcentaje, total
 
 def calcular_faltante_94(promotores, detractores, total):
     if total == 0: return "Sin datos"
@@ -128,28 +140,36 @@ try:
             }
         else:
             MAPA = {
-                'q1': 'CSI', 
+                'q1': 'CALCULO_INTERNO_CSI', 
                 'q2': '1. Basándose en su experiencia de compra, ¿Recomendaría el Concesionario a familiares y amigos?',
                 'q3': 'COMENTARIO DEL CLIENTE',
                 'q4': '2. ¿Cómo califica la cortesía y amabilidad del Vendedor / Asesor Comercial?',
                 'q5': None,
                 'q6': '3. ¿Le han ofrecido una prueba de manejo?',
                 'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo?',
-                'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega?',
+                'q11': '5. ¿Cómo califica la presentation de su 0KM al momento de la entrega?',
                 'q14': '6. ¿Recibió un contacto del concesionario posterior a la entrega de su vehículo?',
                 'q15': '7. ¿Cuán satisfecho se encuentra con el contacto posterior realizado por el concesionario?',
                 'lbl_q1': 'CSI GENERAL (PROMEDIO %)',
                 'lbl_q2': '1. RECOMENDACIÓN (NPS)'
             }
+            # Definimos cuáles columnas contienen las notas para promediar el CSI
+            COLUMNAS_NOTAS_INTERNAS = [MAPA['q4'], MAPA['q8'], MAPA['q11'], MAPA['q15']]
 
         # Clases de apoyo para los botones dinámicos de filtrado
         def categorizar_rapido(val):
             v = pd.to_numeric(val, errors='coerce')
+            if pd.isna(v): return "Sin Datos"
             if v >= 9: return "Promotor"
             if v >= 7: return "Neutro"
             return "Detractor"
 
-        df['Cat_Q1_Dinamica'] = df[MAPA['q1']].apply(categorizar_rapido)
+        # Aplicar categorizaciones dinámicas cuidando que existan las columnas
+        if MAPA['q1'] in df.columns:
+            df['Cat_Q1_Dinamica'] = df[MAPA['q1']].apply(categorizar_rapido)
+        else:
+            df['Cat_Q1_Dinamica'] = "Todos"
+            
         df['Cat_Q2_Dinamica'] = df[MAPA['q2']].apply(categorizar_rapido)
 
         # --- SIDEBAR (FILTROS GLOBALES) ---
@@ -196,12 +216,12 @@ try:
         with tab_global:
             st.header(f"Resultados Consolidados: {', '.join(meses_sel_nombres)}")
             
-            # Lógica para cambiar dinámicamente de NPS a Promedio % (CSI) en el gauge izquierdo
+            # Lógica adaptativa para calcular CSI sin depender de la existencia de la columna fija "CSI"
             if base_seleccionada == "Encuestas de Marca":
                 val_q1, p_q1, n_q1, d_q1, t_q1 = calcular_nps_detallado(df_base[MAPA['q1']])
                 es_prom = False
             else:
-                val_q1, t_q1 = calcular_csi_porcentaje(df_base[MAPA['q1']])
+                val_q1, t_q1 = calcular_csi_porcentaje(df_base, COLUMNAS_NOTAS_INTERNAS)
                 p_q1, n_q1, d_q1 = 0, 0, 0
                 es_prom = True
                 
@@ -264,7 +284,9 @@ try:
                 with stabs_int[1]:
                     e1, e2 = st.columns(2)
                     e1.metric("Preg. 4 - Calidad de Info Pre-entrega", f"{calcular_nps_detallado(df_base[MAPA['q8']])[0]:.1f}%")
-                    e2.metric("Preg. 5 - Presentación y Estado del 0KM", f"{calcular_nps_detallado(df_base[MAPA['q11']])[0]:.1f}%")
+                    # Manejo flexible por si en la hoja interna dice "presentation" en vez de "presentación"
+                    col_entrega = MAPA['q11'] if MAPA['q11'] in df_base.columns else '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega?'
+                    e2.metric("Preg. 5 - Presentación y Estado del 0KM", f"{calcular_nps_detallado(df_base[col_entrega])[0]:.1f}%")
                 with stabs_int[2]:
                     p1, p2 = st.columns(2)
                     st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Preg. 6 - Recepción de Contacto Post-Entrega'), use_container_width=True, key="pie_post_i")
@@ -274,14 +296,13 @@ try:
             label_f = "Todos los registros" if st.session_state.filtro_val == "Todos" else f"Filtro activo: {st.session_state.filtro_val}"
             st.subheader(f"💬 Comentarios y Verbalizaciones del Cliente ({label_f})")
             
-            df_v = df_base[["Fecha de ultimo contacto", "Nombre de cliente", MAPA['q3'], "Vendedor", "Cat_Q1_Dinamica", "Cat_Q2_Dinamica"]].copy()
+            df_v = df_base[["Fecha de ultimo contacto", "Nombre de cliente", MAPA['q3'], "Vendedor", "Cat_Q2_Dinamica"]].copy()
             if st.session_state.filtro_val != "Todos":
                 df_v = df_v[df_v[st.session_state.filtro_col] == st.session_state.filtro_val]
             
             df_v = df_v.sort_values("Fecha de ultimo contacto", ascending=False)
             df_v["Fecha de ultimo contacto"] = df_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
             
-            # Columnas estables fijas tal como lo definimos
             st.dataframe(df_v[["Fecha de ultimo contacto", "Nombre de cliente", MAPA['q3'], "Vendedor"]].rename(columns={MAPA['q3']: 'Comentario textual / Concatenado'}), use_container_width=True, hide_index=True)
 
         # ==========================================================
