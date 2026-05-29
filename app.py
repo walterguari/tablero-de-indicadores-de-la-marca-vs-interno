@@ -49,26 +49,14 @@ def calcular_nps_detallado(serie):
     nps = ((promotores - detractores) / total) * 100
     return nps, promotores, neutros, detractores, total
 
-def calcular_csi_porcentaje(df_filtrado, columnas_notas):
-    # Calcula el CSI promediando de forma limpia las columnas numéricas renglón por renglón
-    valores = pd.DataFrame()
-    for col in columnas_notas:
-        if col in df_filtrado.columns:
-            valores[col] = pd.to_numeric(df_filtrado[col], errors='coerce')
-    
-    if valores.empty:
-        return 0.0, 0
-    
-    # Promedio por fila, y luego promedio de toda la muestra
-    promedios_filas = valores.mean(axis=1, skipna=True).dropna()
-    total = len(promedios_filas)
-    
-    if total == 0:
-        return 0.0, 0
-        
-    # Convertimos la nota escala 1-10 a porcentaje (ej: 9.4 -> 94.0%)
-    promedio_general_porcentaje = promedios_filas.mean() * 10
-    return promedio_general_porcentaje, total
+def calcular_csi_directo_porcentaje(serie):
+    if serie is None or serie.empty: return 0.0, 0
+    serie = pd.to_numeric(serie, errors='coerce').dropna()
+    total = len(serie)
+    if total == 0: return 0.0, 0
+    # Toma el promedio directo de la columna CSI (escala 1-10) y lo lleva a escala % (1-100)
+    promedio_porcentaje = (serie.mean()) * 10
+    return promedio_porcentaje, total
 
 def calcular_faltante_94(promotores, detractores, total):
     if total == 0: return "Sin datos"
@@ -111,7 +99,6 @@ def crear_grafico_torta(df, columna, titulo):
 
 # --- LÓGICA PRINCIPAL ---
 try:
-    # Menu lateral para alternar el origen de las encuestas
     st.sidebar.header("Origen de Datos")
     base_seleccionada = st.sidebar.radio(
         "Seleccione Tipo de Encuesta:",
@@ -138,39 +125,34 @@ try:
                 'lbl_q1': 'Q1 - SATISFACCIÓN (NPS)',
                 'lbl_q2': 'Q2 - RECOMENDACIÓN (NPS)'
             }
+            def categorizar_marca(val):
+                v = pd.to_numeric(val, errors='coerce')
+                if v >= 9: return "Promotor"
+                if v >= 7: return "Neutro"
+                return "Detractor"
+            df['Cat_Filtro_Dinamica'] = df[MAPA['q1']].apply(categorizar_marca)
         else:
             MAPA = {
-                'q1': 'CALCULO_INTERNO_CSI', 
-                'q2': '1. Basándose en su experiencia de compra, ¿Recomendaría el Concesionario a familiares y amigos?',
+                'q1': 'CSI', 
+                'q2': '1. Basándose en su experiencia de compra, ¿Recomendaría el Concesionario a Familiares y amigos?',
                 'q3': 'COMENTARIO DEL CLIENTE',
                 'q4': '2. ¿Cómo califica la cortesía y amabilidad del Vendedor / Asesor Comercial?',
                 'q5': None,
                 'q6': '3. ¿Le han ofrecido una prueba de manejo?',
                 'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo?',
-                'q11': '5. ¿Cómo califica la presentation de su 0KM al momento de la entrega?',
+                'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega?',
                 'q14': '6. ¿Recibió un contacto del concesionario posterior a la entrega de su vehículo?',
                 'q15': '7. ¿Cuán satisfecho se encuentra con el contacto posterior realizado por el concesionario?',
                 'lbl_q1': 'CSI GENERAL (PROMEDIO %)',
                 'lbl_q2': '1. RECOMENDACIÓN (NPS)'
             }
-            # Definimos cuáles columnas contienen las notas para promediar el CSI
-            COLUMNAS_NOTAS_INTERNAS = [MAPA['q4'], MAPA['q8'], MAPA['q11'], MAPA['q15']]
-
-        # Clases de apoyo para los botones dinámicos de filtrado
-        def categorizar_rapido(val):
-            v = pd.to_numeric(val, errors='coerce')
-            if pd.isna(v): return "Sin Datos"
-            if v >= 9: return "Promotor"
-            if v >= 7: return "Neutro"
-            return "Detractor"
-
-        # Aplicar categorizaciones dinámicas cuidando que existan las columnas
-        if MAPA['q1'] in df.columns:
-            df['Cat_Q1_Dinamica'] = df[MAPA['q1']].apply(categorizar_rapido)
-        else:
-            df['Cat_Q1_Dinamica'] = "Todos"
-            
-        df['Cat_Q2_Dinamica'] = df[MAPA['q2']].apply(categorizar_rapido)
+            # REGLAS EXACTAS DE LA INTERNA PROPUESTAS POR WALTER
+            def categorizar_interna(val):
+                v = pd.to_numeric(val, errors='coerce')
+                if v >= 9.0: return "Promotor"
+                if v >= 7.0: return "Neutro"
+                return "Detractor"
+            df['Cat_Filtro_Dinamica'] = df[MAPA['q1']].apply(categorizar_interna)
 
         # --- SIDEBAR (FILTROS GLOBALES) ---
         st.sidebar.markdown("---")
@@ -196,7 +178,6 @@ try:
         canales_disponibles = sorted(df_time[df_time["MARCA"].isin(marcas)]["Canal de Venta"].dropna().unique())
         canales = st.sidebar.multiselect("Canal de Venta", options=canales_disponibles, default=canales_disponibles, key="sb_canales_final")
 
-        # Base de datos final filtrada
         df_base = df_time[(df_time["MARCA"].isin(marcas)) & (df_time["Canal de Venta"].isin(canales))]
 
         st.title(f"📊 Control de Calidad Autociel - {base_seleccionada}")
@@ -207,7 +188,6 @@ try:
             "👤 Ficha Individual por Asesor"
         ])
 
-        if 'filtro_col' not in st.session_state: st.session_state.filtro_col = "Cat_Q2_Dinamica"
         if 'filtro_val' not in st.session_state: st.session_state.filtro_val = "Todos"
 
         # ==========================================================
@@ -216,37 +196,34 @@ try:
         with tab_global:
             st.header(f"Resultados Consolidados: {', '.join(meses_sel_nombres)}")
             
-            # Lógica adaptativa para calcular CSI sin depender de la existencia de la columna fija "CSI"
             if base_seleccionada == "Encuestas de Marca":
                 val_q1, p_q1, n_q1, d_q1, t_q1 = calcular_nps_detallado(df_base[MAPA['q1']])
-                es_prom = False
             else:
-                val_q1, t_q1 = calcular_csi_porcentaje(df_base, COLUMNAS_NOTAS_INTERNAS)
-                p_q1, n_q1, d_q1 = 0, 0, 0
-                es_prom = True
+                val_q1, t_q1 = calcular_csi_directo_porcentaje(df_base[MAPA['q1']])
+                # Contamos promotores/neutros/detractores basados en el rango del CSI definido por Walter
+                serie_csi = pd.to_numeric(df_base[MAPA['q1']], errors='coerce').dropna()
+                p_q1 = (serie_csi >= 9.0).sum()
+                n_q1 = ((serie_csi >= 7.0) & (serie_csi < 9.0)).sum()
+                d_q1 = (serie_csi < 7.0).sum()
                 
             nps_q2, p_q2, n_q2, d_q2, _ = calcular_nps_detallado(df_base[MAPA['q2']])
 
             c_q1, c_q2, c_tot = st.columns([2.2, 2.2, 0.6])
             with c_q1:
                 st.plotly_chart(crear_gauge_moderno(val_q1, MAPA['lbl_q1']), use_container_width=True, key="gauge_autociel_q1")
-                if not es_prom:
-                    col_b1, col_b2, col_b3 = st.columns(3)
-                    if col_b1.button(f"🟢 {p_q1} Prom", key="btn_f_q1_p"): 
-                        st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1_Dinamica", "Promotor"; st.rerun()
-                    if col_b2.button(f"🟡 {n_q1} Neu", key="btn_f_q1_n"): 
-                        st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1_Dinamica", "Neutro"; st.rerun()
-                    if col_b3.button(f"🔴 {d_q1} Det", key="btn_f_q1_d"): 
-                        st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1_Dinamica", "Detractor"; st.rerun()
+                col_b1, col_b2, col_b3 = st.columns(3)
+                if col_b1.button(f"🟢 {p_q1} Prom", key="btn_f_q1_p"): 
+                    st.session_state.filtro_val = "Promotor"; st.rerun()
+                if col_b2.button(f"🟡 {n_q1} Neu", key="btn_f_q1_n"): 
+                    st.session_state.filtro_val = "Neutro"; st.rerun()
+                if col_b3.button(f"🔴 {d_q1} Det", key="btn_f_q1_d"): 
+                    st.session_state.filtro_val = "Detractor"; st.rerun()
             with c_q2:
                 st.plotly_chart(crear_gauge_moderno(nps_q2, MAPA['lbl_q2']), use_container_width=True, key="gauge_autociel_q2")
                 col_b4, col_b5, col_b6 = st.columns(3)
-                if col_b4.button(f"🟢 {p_q2} Prom", key="btn_f_q2_p"): 
-                    st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2_Dinamica", "Promotor"; st.rerun()
-                if col_b5.button(f"🟡 {n_q2} Neu", key="btn_f_q2_n"): 
-                    st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2_Dinamica", "Neutro"; st.rerun()
-                if col_b6.button(f"🔴 {d_q2} Det", key="btn_f_q2_d"): 
-                    st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2_Dinamica", "Detractor"; st.rerun()
+                if col_b4.button(f"🟢 {p_q2} Muest", key="btn_f_q2_p"): st.info("Filtro rápido controlado por los botones del CSI izquierdo."); pass
+                if col_b5.button(f"🟡 {n_q2} Muest", key="btn_f_q2_n"): pass
+                if col_b6.button(f"🔴 {d_q2} Muest", key="btn_f_q2_d"): pass
             with c_tot:
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 st.metric("Muestra", t_q1)
@@ -256,7 +233,6 @@ try:
 
             st.markdown("---")
             
-            # Bloque de sub-pestañas adaptativas según la base seleccionada
             if base_seleccionada == "Encuestas de Marca":
                 stabs = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
                 with stabs[0]:
@@ -284,9 +260,7 @@ try:
                 with stabs_int[1]:
                     e1, e2 = st.columns(2)
                     e1.metric("Preg. 4 - Calidad de Info Pre-entrega", f"{calcular_nps_detallado(df_base[MAPA['q8']])[0]:.1f}%")
-                    # Manejo flexible por si en la hoja interna dice "presentation" en vez de "presentación"
-                    col_entrega = MAPA['q11'] if MAPA['q11'] in df_base.columns else '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega?'
-                    e2.metric("Preg. 5 - Presentación y Estado del 0KM", f"{calcular_nps_detallado(df_base[col_entrega])[0]:.1f}%")
+                    e2.metric("Preg. 5 - Presentación y Estado del 0KM", f"{calcular_nps_detallado(df_base[MAPA['q11']])[0]:.1f}%")
                 with stabs_int[2]:
                     p1, p2 = st.columns(2)
                     st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Preg. 6 - Recepción de Contacto Post-Entrega'), use_container_width=True, key="pie_post_i")
@@ -296,9 +270,9 @@ try:
             label_f = "Todos los registros" if st.session_state.filtro_val == "Todos" else f"Filtro activo: {st.session_state.filtro_val}"
             st.subheader(f"💬 Comentarios y Verbalizaciones del Cliente ({label_f})")
             
-            df_v = df_base[["Fecha de ultimo contacto", "Nombre de cliente", MAPA['q3'], "Vendedor", "Cat_Q2_Dinamica"]].copy()
+            df_v = df_base[["Fecha de ultimo contacto", "Nombre de cliente", MAPA['q3'], "Vendedor", "Cat_Filtro_Dinamica"]].copy()
             if st.session_state.filtro_val != "Todos":
-                df_v = df_v[df_v[st.session_state.filtro_col] == st.session_state.filtro_val]
+                df_v = df_v[df_v["Cat_Filtro_Dinamica"] == st.session_state.filtro_val]
             
             df_v = df_v.sort_values("Fecha de ultimo contacto", ascending=False)
             df_v["Fecha de ultimo contacto"] = df_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
