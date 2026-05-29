@@ -31,6 +31,18 @@ def load_data(url, tipo_base):
             df["Vendedor"] = df["VENDEDOR"]
             col_q1 = '1. Basándose en su experiencia de compra, ¿Recomendaría el Concesionario a Familiares y amigos?'
             col_q2 = '1. Basándose en su experiencia de compra, ¿Recomendaría el Concesionario a Familiares y amigos?'
+            
+            # Protección por si "Nombre de cliente" no se llama exactamente así en la interna
+            if "Nombre de cliente" not in df.columns:
+                posibles_columnas_cliente = ["Cliente", "Nombre", "NOMBRE", "CLIENTE", "Nombre y Apellido"]
+                col_encontrada = False
+                for col in posibles_columnas_cliente:
+                    if col in df.columns:
+                        df["Nombre de cliente"] = df[col]
+                        col_encontrada = True
+                        break
+                if not col_encontrada:
+                    df["Nombre de cliente"] = "Anónimo"
         
         def categorizar_nps(val):
             val = pd.to_numeric(val, errors='coerce')
@@ -140,7 +152,7 @@ try:
                 'lbl_q2': 'RECOMENDACIÓN (INTERNA)'
             }
 
-        # --- SIDEBAR (FILTROS GLOBALEs) ---
+        # --- SIDEBAR (FILTROS GLOBALES) ---
         st.sidebar.markdown("---")
         st.sidebar.header("Filtros Globales")
         df['Anio'] = df["Fecha de ultimo contacto"].dt.year
@@ -151,7 +163,7 @@ try:
         
         meses_n = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6: "Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
         meses_disp_nums = sorted(df[df['Anio'] == anio_sel]['Mes_Num'].unique())
-        meses_disp_nombres = [meses_n[m] for m in meses_disp_nums] if meses_disp_nums else ["Abril"]
+        meses_disp_nombres = [meses_n[m] for m in meses_disp_nums] if meses_disp_nums else ["Mayo"]
         
         meses_sel_nombres = st.sidebar.multiselect("Seleccione Mes(es)", options=meses_disp_nombres, default=meses_disp_nombres[-1:])
         meses_sel_nums = [k for k, v in meses_n.items() if v in meses_sel_nombres]
@@ -365,7 +377,7 @@ try:
                     fig_linea.add_hline(y=94, line_dash="dash", line_color="green", annotation_text="Objetivo 94%")
                     fig_linea.update_traces(textposition="top center", line=dict(color='#007bff', width=3))
                     fig_linea.update_layout(yaxis=dict(range=[-10, 110]), height=300, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig_linea, use_container_width=True, key="grafico_evolucion_vendedor_master_final")
+                    st.plotly_chart(fig_linea, use_container_width=True, key="grafico_evolucion_vendedor_master_final_v2")
                 else:
                     st.info("Sin historial suficiente para trazar línea de tiempo.")
                 
