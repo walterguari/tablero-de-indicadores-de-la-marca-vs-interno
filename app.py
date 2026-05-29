@@ -17,22 +17,21 @@ def load_data(url, tipo_base):
         csv_url = url.replace("/edit#gid=", "/export?format=csv&gid=").replace("/edit?gid=", "/export?format=csv&gid=")
         df = pd.read_csv(csv_url)
         
-        # Normalización de Fechas y Columnas comunes
+        # Normalización y mapeo estructural según el origen de datos
         if tipo_base == "Encuestas de Marca":
             df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
         else:
+            # Mapeo idéntico para la base Interna respetando las mayúsculas de tu archivo
             df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de último contacto"], dayfirst=True, errors='coerce')
             df["MARCA"] = df["MARCA"]
             df["Canal de Venta"] = df["CANAL DE VENTA"]
             df["Vendedor"] = df["VENDEDOR"]
             
-            # Autodetector preventivo para el nombre del cliente en la interna
-            for col in ["Nombre de cliente", "Cliente", "Nombre", "CLIENTE"]:
-                if col in df.columns:
-                    df["Nombre de cliente"] = df[col]
-                    break
-            if "Nombre de cliente" not in df.columns:
-                df["Nombre de cliente"] = "Anónimo"
+            # Forzar la columna de cliente según lo visto en la imagen
+            if "Cliente" in df.columns:
+                df["Nombre de cliente"] = df["Cliente"]
+            elif "Nombre de cliente" not in df.columns:
+                df["Nombre de cliente"] = "Cliente Autociel"
                 
         return df
     except Exception as e:
@@ -64,7 +63,6 @@ def calcular_faltante_94(promotores, detractores, total):
     return f"🚨 Faltan {math.ceil(x)}"
 
 def get_bar_color(val, es_promedio=False):
-    # Ajuste de límites si es formato promedio (0-10) o NPS (0-100)
     limite_sup = 9.4 if es_promedio else 94
     limite_med = 9.0 if es_promedio else 90
     if val >= limite_sup: return '#28a745'
@@ -114,7 +112,7 @@ try:
     df = load_data(sheet_url, base_seleccionada)
     
     if not df.empty:
-        # --- MAPEO CONFIGURADO SEGÚN TUS OBSERVACIONES ---
+        # --- MAPEO DINÁMICO DE COLUMNAS EXACTO ---
         if base_seleccionada == "Encuestas de Marca":
             MAPA = {
                 'q1': 'Q1 - Satisfacción general',
@@ -136,8 +134,8 @@ try:
                 'q2': '1. Basándose en su experiencia de compra, ¿Recomendaría el Concesionario a familiares y amigos?',
                 'q3': 'COMENTARIO DEL CLIENTE',
                 'q4': '2. ¿Cómo califica la cortesía y amabilidad del Vendedor / Asesor Comercial?',
-                'q5': None, # No aplica en interna
-                'q6': '3. ¿Le han BIEN ofrecido una prueba de manejo?' if '3. ¿Le han BIEN ofrecido una prueba de manejo?' in df.columns else '3. ¿Le han ofrecido una prueba de manejo?',
+                'q5': None,
+                'q6': '3. ¿Le han ofrecido una prueba de manejo?',
                 'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo?',
                 'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega?',
                 'q14': '6. ¿Recibió un contacto del concesionario posterior a la entrega de su vehículo?',
@@ -146,7 +144,6 @@ try:
                 'lbl_q2': '1. RECOMENDACIÓN (NPS)'
             }
 
-        # Categorización interna para filtros rápidos en clicks de botones
         def categorizar_rapido(val):
             v = pd.to_numeric(val, errors='coerce')
             if v >= 9: return "Promotor"
@@ -156,7 +153,7 @@ try:
         df['Cat_Q1_Dinamica'] = df[MAPA['q1']].apply(categorizar_rapido)
         df['Cat_Q2_Dinamica'] = df[MAPA['q2']].apply(categorizar_rapido)
 
-        # --- SIDEBAR FILTROS GLOBALES ---
+        # --- FILTROS GLOBALES TEMPORALES Y DE SEGMENTO ---
         st.sidebar.markdown("---")
         st.sidebar.header("Filtros Globales")
         df['Anio'] = df["Fecha de ultimo contacto"].dt.year
@@ -199,7 +196,7 @@ try:
         with tab_global:
             st.header(f"Resultados Consolidados: {', '.join(meses_sel_nombres)}")
             
-            # Cálculo condicional de bloque izquierdo (Q1 es NPS en Marca, pero Promedio en Interna)
+            # Condicional para calcular Q1 (NPS) o CSI (Promedio) según la base activa
             if base_seleccionada == "Encuestas de Marca":
                 val_q1, p_q1, n_q1, d_q1, t_q1 = calcular_nps_detallado(df_base[MAPA['q1']])
                 es_prom = False
@@ -212,34 +209,33 @@ try:
 
             c_q1, c_q2, c_tot = st.columns([2.2, 2.2, 0.6])
             with c_q1:
-                st.plotly_chart(crear_gauge_moderno(val_q1, MAPA['lbl_q1'], es_promedio=es_prom), use_container_width=True, key="g_q1_autociel")
+                st.plotly_chart(crear_gauge_moderno(val_q1, MAPA['lbl_q1'], es_promedio=es_prom), use_container_width=True, key="g_q1_autociel_v3")
                 if not es_prom:
                     col_b1, col_b2, col_b3 = st.columns(3)
-                    if col_b1.button(f"🟢 {p_q1} Prom", key="btn_q1_p"): 
+                    if col_b1.button(f"🟢 {p_q1} Prom", key="btn_q1_p3"): 
                         st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1_Dinamica", "Promotor"; st.rerun()
-                    if col_b2.button(f"🟡 {n_q1} Neu", key="btn_q1_n"): 
+                    if col_b2.button(f"🟡 {n_q1} Neu", key="btn_q1_n3"): 
                         st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1_Dinamica", "Neutro"; st.rerun()
-                    if col_b3.button(f"🔴 {d_q1} Det", key="btn_q1_d"): 
+                    if col_b3.button(f"🔴 {d_q1} Det", key="btn_q1_d3"): 
                         st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q1_Dinamica", "Detractor"; st.rerun()
             with c_q2:
-                st.plotly_chart(crear_gauge_moderno(nps_q2, MAPA['lbl_q2']), use_container_width=True, key="g_q2_autociel")
+                st.plotly_chart(crear_gauge_moderno(nps_q2, MAPA['lbl_q2']), use_container_width=True, key="g_q2_autociel_v3")
                 col_b4, col_b5, col_b6 = st.columns(3)
-                if col_b4.button(f"🟢 {p_q2} Prom", key="btn_q2_p"): 
+                if col_b4.button(f"🟢 {p_q2} Prom", key="btn_q2_p3"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2_Dinamica", "Promotor"; st.rerun()
-                if col_b5.button(f"🟡 {n_q2} Neu", key="btn_q2_n"): 
+                if col_b5.button(f"🟡 {n_q2} Neu", key="btn_q2_n3"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2_Dinamica", "Neutro"; st.rerun()
-                if col_b6.button(f"🔴 {d_q2} Det", key="btn_q2_d"): 
+                if col_b6.button(f"🔴 {d_q2} Det", key="btn_q2_d3"): 
                     st.session_state.filtro_col, st.session_state.filtro_val = "Cat_Q2_Dinamica", "Detractor"; st.rerun()
             with c_tot:
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 st.metric("Respuestas", t_q1)
-                if st.button("🔄 Ver\nTodos", key="clear_filtros_autociel"): 
+                if st.button("🔄 Ver\nTodos", key="clear_filtros_autociel_v3"): 
                     st.session_state.filtro_val = "Todos"
                     st.rerun()
 
             st.markdown("---")
             
-            # Bloques dinámicos de pestañas secundarias adaptadas por origen
             if base_seleccionada == "Encuestas de Marca":
                 stabs = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
                 with stabs[0]:
@@ -249,11 +245,11 @@ try:
                 with stabs[1]:
                     ct1, ct2 = st.columns(2)
                     ct1.metric("Q7 - Satisfacción Test Drive", f"{calcular_nps_detallado(df_base['Q7 - Satisfacción Test Drive'])[0]:.1f}%")
-                    st.plotly_chart(crear_grafico_torta(df_base, MAPA['q6'], 'Q6 - Ofrecimiento Test Drive'), use_container_width=True, key="t_td_m")
+                    st.plotly_chart(crear_grafico_torta(df_base, MAPA['q6'], 'Q6 - Ofrecimiento Test Drive'), use_container_width=True, key="t_td_m3")
                 with stabs[2]:
                     cf1, cf2 = st.columns(2)
                     cf1.metric("Q10 - Satisfacción Financiación", f"{calcular_nps_detallado(df_base['Q10 - Satisfacción Financiación utilizada'])[0]:.1f}%")
-                    st.plotly_chart(crear_grafico_torta(df_base, 'Q9 - Financiación utilizada', 'Mix Ventas Financiadas'), use_container_width=True, key="t_fin_m")
+                    st.plotly_chart(crear_grafico_torta(df_base, 'Q9 - Financiación utilizada', 'Mix Ventas Financiadas'), use_container_width=True, key="t_fin_m3")
                 with stabs[3]:
                     ce1, ce2 = st.columns(2)
                     ce1.metric("Q8 - Info Pre-entrega", f"{calcular_nps_detallado(df_base[MAPA['q8']])[0]:.1f}%")
@@ -263,14 +259,14 @@ try:
                 with stabs_int[0]:
                     v1, v2 = st.columns(2)
                     v1.metric("Preg. 2 - Cortesía y Amabilidad del Asesor", f"{calcular_nps_detallado(df_base[MAPA['q4']])[0]:.1f}%")
-                    st.plotly_chart(crear_grafico_torta(df_base, MAPA['q6'], 'Preg. 3 - Ofrecimiento de Test Drive'), use_container_width=True, key="t_td_i")
+                    st.plotly_chart(crear_grafico_torta(df_base, MAPA['q6'], 'Preg. 3 - Ofrecimiento de Test Drive'), use_container_width=True, key="t_td_i3")
                 with stabs_int[1]:
                     e1, e2 = st.columns(2)
                     e1.metric("Preg. 4 - Calidad de Info Pre-entrega", f"{calcular_nps_detallado(df_base[MAPA['q8']])[0]:.1f}%")
                     e2.metric("Preg. 5 - Presentación y Estado del 0KM", f"{calcular_nps_detallado(df_base[MAPA['q11']])[0]:.1f}%")
                 with stabs_int[2]:
                     p1, p2 = st.columns(2)
-                    st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Preg. 6 - Recepción de Contacto Post-Entrega'), use_container_width=True, key="t_post_i")
+                    st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Preg. 6 - Recepción de Contacto Post-Entrega'), use_container_width=True, key="t_post_i3")
                     p2.metric("Preg. 7 - Satisfacción con la llamada/whatsapp", f"{calcular_nps_detallado(df_base[MAPA['q15']])[0]:.1f}%")
 
             st.markdown("---")
@@ -283,10 +279,10 @@ try:
             
             df_v = df_v.sort_values("Fecha de ultimo contacto", ascending=False)
             df_v["Fecha de ultimo contacto"] = df_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
-            st.dataframe(df_v[["Fecha de ultimo contacto", "Nombre de cliente", MAPA['q3'], "Vendedor"]].rename(columns={MAPA['q3']: 'Comentario textual'}), use_container_width=True, hide_index=True)
+            st.dataframe(df_v[["Fecha de ultimo contacto", "Nombre de cliente", MAPA['q3'], "Vendedor"]].rename(columns={MAPA['q3']: 'Comentario textual / Concatenado'}), use_container_width=True, hide_index=True)
 
         # ==========================================================
-        # TAB 2: TABLA UNIFICADA DE ASESORES (RANKING INTERACTIVO)
+        # TAB 2: TABLA UNIFICADA DE ASESORES
         # ==========================================================
         with tab_unificada:
             st.header("Ranking de Performance por Asesor Comercial")
@@ -332,10 +328,9 @@ try:
             
             vendedores_disponibles = sorted(df_base["Vendedor"].dropna().unique())
             if vendedores_disponibles:
-                vendedor_sel = st.selectbox("Seleccione el Asesor a evaluar:", options=vendedores_disponibles, key="sb_vend_ind")
+                vendedor_sel = st.selectbox("Seleccione el Asesor a evaluar:", options=vendedores_disponibles, key="sb_vend_ind3")
                 df_vend = df_base[df_base["Vendedor"] == vendedor_sel]
                 
-                # Historial de tendencia mensual
                 df_vend_full = df[(df["Vendedor"] == vendedor_sel) & (df["MARCA"].isin(marcas)) & (df["Canal de Venta"].isin(canales))].copy()
                 df_vend_full["Periodo"] = df_vend_full["Fecha de ultimo contacto"].dt.to_period("M")
                 
@@ -383,7 +378,7 @@ try:
                     fig_linea.add_hline(y=94, line_dash="dash", line_color="green", annotation_text="Objetivo (94%)")
                     fig_linea.update_traces(textposition="top center", line=dict(color='#007bff', width=3))
                     fig_linea.update_layout(yaxis=dict(range=[-10, 110]), height=280, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig_linea, use_container_width=True, key="linea_ind_autociel")
+                    st.plotly_chart(fig_linea, use_container_width=True, key="linea_ind_autociel_v3")
                 else:
                     st.info("Sin registros previos para armar evolutivos.")
                 
