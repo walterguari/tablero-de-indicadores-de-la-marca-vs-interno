@@ -15,7 +15,6 @@ def limpiar_comas_a_numerico(serie):
     """Convierte strings con comas a números flotantes legibles por Python"""
     if serie is None or serie.empty:
         return pd.Series(dtype=float)
-    # Reemplaza comas por puntos y fuerza la conversión a número
     return pd.to_numeric(serie.astype(str).str.replace(',', '.'), errors='coerce')
 
 @st.cache_data(ttl=600)
@@ -28,13 +27,13 @@ def load_data(url, tipo_base):
         if tipo_base == "Encuestas de Marca":
             df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
         else:
-            # Base Interna (Respetando las mayúsculas de tu archivo)
+            # Base Interna (Respetando las mayúsculas exactas de tu archivo)
             df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de último contacto"], dayfirst=True, errors='coerce')
             df["MARCA"] = df["MARCA"]
             df["Canal de Venta"] = df["CANAL DE VENTA"]
             df["Vendedor"] = df["VENDEDOR"]
             
-            # Forzar la columna unificada de cliente para evitar errores de índice
+            # Mapeo preventivo de la columna cliente para la tabla de comentarios
             if "Cliente" in df.columns:
                 df["Nombre de cliente"] = df["Cliente"]
             elif "Nombre de cliente" not in df.columns:
@@ -59,7 +58,7 @@ def calcular_csi_directo_porcentaje(serie):
     serie_limpia = limpiar_comas_a_numerico(serie).dropna()
     total = len(serie_limpia)
     if total == 0: return 0.0, 0
-    # Toma el promedio directo de la columna CSI (escala 1-10) y lo lleva a escala % (1-100)
+    # Convierte el promedio de la columna CSI (escala 1-10) a escala % (1-100)
     promedio_porcentaje = (serie_limpia.mean()) * 10
     return promedio_porcentaje, total
 
@@ -151,7 +150,7 @@ try:
                 'lbl_q1': 'CSI GENERAL (PROMEDIO %)',
                 'lbl_q2': '1. RECOMENDACIÓN (NPS)'
             }
-            # REGLAS EXACTAS DE LA INTERNA PROPUESTAS POR WALTER CON LIMPIEZA DE COMAS
+            # Reglas del semáforo CSI para la tabla e indicadores internos (Walter: 9, 7, 6.99)
             serie_csi_limpia = limpiar_comas_a_numerico(df[MAPA['q1']])
             def categorizar_interna(v):
                 if pd.isna(v): return "Sin Datos"
@@ -206,7 +205,6 @@ try:
                 val_q1, p_q1, n_q1, d_q1, t_q1 = calcular_nps_detallado(df_base[MAPA['q1']])
             else:
                 val_q1, t_q1 = calcular_csi_directo_porcentaje(df_base[MAPA['q1']])
-                # Contamos promotores/neutros/detractores basados en el rango del CSI definido por Walter con limpieza
                 serie_csi = limpiar_comas_a_numerico(df_base[MAPA['q1']]).dropna()
                 p_q1 = (serie_csi >= 9.0).sum()
                 n_q1 = ((serie_csi >= 7.0) & (serie_csi < 9.0)).sum()
@@ -266,7 +264,6 @@ try:
                 with stabs_int[1]:
                     e1, e2 = st.columns(2)
                     e1.metric("Preg. 4 - Calidad de Info Pre-entrega", f"{calcular_nps_detallado(df_base[MAPA['q8']])[0]:.1f}%")
-                    # Manejo flexible por si en la hoja interna dice presentation u otra variación
                     col_entrega_int = MAPA['q11'] if MAPA['q11'] in df_base.columns else '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega?'
                     e2.metric("Preg. 5 - Presentación y Estado del 0KM", f"{calcular_nps_detallado(df_base[col_entrega_int])[0]:.1f}%")
                 with stabs_int[2]:
