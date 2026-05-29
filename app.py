@@ -145,7 +145,7 @@ try:
                 'q6': '3. ¿Le han ofrecido una prueba de manejo?',
                 'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo? (Comunicación y explicación de tramites administrativos)',
                 'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega? (explicaciones de las características, la limpieza y la presentación con el vehículo, entre otros aspectos.)',
-                'q14': '6. ¿Recibió un contacto del concesionario posterior a la entrega de su vehículo?',
+                'q14': '6. ¿Recibió un contacto del concesionario posterior a la entrega de su vehículo? (vía whatsapp, sms, correo o llamado)',
                 'q15': '7. ¿Cuán satisfecho se encuentra con el contacto posterior realizado por el concesionario?',
                 'lbl_q1': 'CSI GENERAL (PROMEDIO %)',
                 'lbl_q2': '1. RECOMENDACIÓN (NPS)'
@@ -256,10 +256,10 @@ try:
                     ce1.metric("Q8 - Info Pre-entrega", f"{calcular_nps_detallado(df_base[MAPA['q8']])[0]:.1f}%")
                     ce2.metric("Q11 - Momento de la entrega", f"{calcular_nps_detallado(df_base[MAPA['q11']])[0]:.1f}%")
             else:
-                stabs_int = st.tabs(["🤝 Gestión Comercial", "📦 Procesos y Entrega", "📞 Seguimiento Postventa"])
+                # SOLAPA INTERNA ACTUALIZADA POR WALTER
+                stabs_int = st.tabs(["🤝 Gestión Comercial", "📦 Procesos y Entrega", "📞 Contacto posterior"])
                 with stabs_int[0]:
                     v1, v2 = st.columns(2)
-                    # Cambio a cálculo directo de porcentaje (CSI) + Gauge circular para la interna
                     val_p2_int, _ = calcular_csi_directo_porcentaje(df_base[MAPA['q4']])
                     with v1:
                         st.plotly_chart(crear_gauge_moderno(val_p2_int, "Preg. 2 - Cortesía y Amabilidad del Asesor"), use_container_width=True, key="gauge_p2_int_sub")
@@ -277,9 +277,10 @@ try:
                     p1, p2 = st.columns(2)
                     val_p7_int, _ = calcular_csi_directo_porcentaje(df_base[MAPA['q15']])
                     with p1:
-                        st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Preg. 6 - Recepción de Contacto Post-Entrega'), use_container_width=True, key="pie_post_i")
+                        # Se agrega el grafico de torta para la Pregunta 6 tal cual lo solicitado
+                        st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Preg. 6 - Recepción de Contacto Post-Entrega'), use_container_width=True, key="pie_post_i_final")
                     with p2:
-                        st.plotly_chart(crear_gauge_moderno(val_p7_int, "Preg. 7 - Satisfacción con la llamada/whatsapp"), use_container_width=True, key="gauge_p7_int_sub")
+                        st.plotly_chart(crear_gauge_moderno(val_p7_int, "Preg. 7 - Satisfacción con el contacto posterior"), use_container_width=True, key="gauge_p7_int_sub")
 
             st.markdown("---")
             label_f = "Todos los registros" if st.session_state.filtro_val == "Todos" else f"Filtro activo: {st.session_state.filtro_val}"
