@@ -143,14 +143,14 @@ try:
                 'q4': '2. ¿Cómo califica la cortesía y amabilidad del Vendedor / Asesor Comercial?',
                 'q5': None,
                 'q6': '3. ¿Le han ofrecido una prueba de manejo?',
-                'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo?',
-                'q11': '5. ¿Cómo califica la presentation de su 0KM al momento de la entrega?',
+                'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo? (Comunicación y explicación de tramites administrativos)',
+                'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega? (explicaciones de las características, la limpieza y la presentación con el vehículo, entre otros aspectos.)',
                 'q14': '6. ¿Recibió un contacto del concesionario posterior a la entrega de su vehículo?',
                 'q15': '7. ¿Cuán satisfecho se encuentra con el contacto posterior realizado por el concesionario?',
                 'lbl_q1': 'CSI GENERAL (PROMEDIO %)',
                 'lbl_q2': '1. RECOMENDACIÓN (NPS)'
             }
-            # Reglas del semáforo CSI para la tabla e indicadores internos (Walter: 9, 7, 6.99)
+            # Reglas del semáforo CSI para la tabla e indicadores internos
             serie_csi_limpia = limpiar_comas_a_numerico(df[MAPA['q1']])
             def categorizar_interna(v):
                 if pd.isna(v): return "Sin Datos"
@@ -264,8 +264,7 @@ try:
                 with stabs_int[1]:
                     e1, e2 = st.columns(2)
                     e1.metric("Preg. 4 - Calidad de Info Pre-entrega", f"{calcular_nps_detallado(df_base[MAPA['q8']])[0]:.1f}%")
-                    col_entrega_int = MAPA['q11'] if MAPA['q11'] in df_base.columns else '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega?'
-                    e2.metric("Preg. 5 - Presentación y Estado del 0KM", f"{calcular_nps_detallado(df_base[col_entrega_int])[0]:.1f}%")
+                    e2.metric("Preg. 5 - Presentación y Estado del 0KM", f"{calcular_nps_detallado(df_base[MAPA['q11']])[0]:.1f}%")
                 with stabs_int[2]:
                     p1, p2 = st.columns(2)
                     st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Preg. 6 - Recepción de Contacto Post-Entrega'), use_container_width=True, key="pie_post_i")
