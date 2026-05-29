@@ -27,7 +27,7 @@ def load_data(url, tipo_base):
         if tipo_base == "Encuestas de Marca":
             df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
         else:
-            # Base Interna
+            # Base Interna (Respetando las mayúsculas exactas de tu archivo)
             df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de último contacto"], dayfirst=True, errors='coerce')
             df["MARCA"] = df["MARCA"]
             df["Canal de Venta"] = df["CANAL DE VENTA"]
@@ -58,7 +58,7 @@ def calcular_csi_directo_porcentaje(serie):
     serie_limpia = limpiar_comas_a_numerico(serie).dropna()
     total = len(serie_limpia)
     if total == 0: return 0.0, 0
-    # Convierte el promedio de la columna (escala 1-10) a escala % (1-100)
+    # Convierte el promedio de la columna CSI (escala 1-10) a escala % (1-100)
     promedio_porcentaje = (serie_limpia.mean()) * 10
     return promedio_porcentaje, total
 
@@ -74,13 +74,13 @@ def get_bar_color(val):
     if val >= 90: return '#ffc107'
     return '#dc3545'
 
-def crear_gauge_moderno(valor, titulo, alto_grafico=220):
+def crear_gauge_moderno(valor, titulo):
     color_viva = get_bar_color(valor)
     fig = go.Figure(go.Indicator(
         mode = "gauge+number",
         value = valor,
-        title = {'text': f"<b>{titulo}</b>", 'font': {'size': 14, 'color': '#333'}},
-        number = {'suffix': "%", 'font': {'size': 34}, 'valueformat': '.1f'},
+        title = {'text': f"<b>{titulo}</b>", 'font': {'size': 16, 'color': '#333'}},
+        number = {'suffix': "%", 'font': {'size': 38}, 'valueformat': '.1f'},
         gauge = {
             'axis': {'range': [0, 100], 'visible': False},
             'bar': {'color': color_viva, 'thickness': 0.15},
@@ -88,7 +88,7 @@ def crear_gauge_moderno(valor, titulo, alto_grafico=220):
             'threshold': {'line': {'color': "black", 'width': 3}, 'thickness': 0.8, 'value': 94}
         }
     ))
-    fig.update_layout(height=alto_grafico, margin=dict(l=30, r=30, t=40, b=10), paper_bgcolor='rgba(0,0,0,0)')
+    fig.update_layout(height=220, margin=dict(l=30, r=30, t=40, b=0), paper_bgcolor='rgba(0,0,0,0)')
     return fig
 
 def crear_grafico_torta(df, columna, titulo):
@@ -144,7 +144,7 @@ try:
                 'q5': None,
                 'q6': '3. ¿Le han ofrecido una prueba de manejo?',
                 'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo? (Comunicación y explicación de tramites administrativos)',
-                'q11': '5. ¿Cómo califica la presentation de su 0KM al momento de la entrega? (explicaciones de las características, la limpieza y la presentación con el vehículo, entre otros aspectos.)',
+                'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega? (explicaciones de las características, la limpieza y la presentación con el vehículo, entre otros aspectos.)',
                 'q14': '6. ¿Recibió un contacto del concesionario posterior a la entrega de su vehículo?',
                 'q15': '7. ¿Cuán satisfecho se encuentra con el contacto posterior realizado por el concesionario?',
                 'lbl_q1': 'CSI GENERAL (PROMEDIO %)',
@@ -259,27 +259,16 @@ try:
                 stabs_int = st.tabs(["🤝 Gestión Comercial", "📦 Procesos y Entrega", "📞 Seguimiento Postventa"])
                 with stabs_int[0]:
                     v1, v2 = st.columns(2)
-                    # Reloj circular moderno para la pregunta de cortesía en la encuesta interna (CSI %)
-                    val_p2_int, _ = calcular_csi_directo_porcentaje(df_base[MAPA['q4']])
-                    with v1:
-                        st.plotly_chart(crear_gauge_moderno(val_p2_int, "Preg. 2 - Cortesía y Amabilidad del Asesor", alto_grafico=250), use_container_width=True, key="gauge_p2_interna")
-                    with v2:
-                        st.plotly_chart(crear_grafico_torta(df_base, MAPA['q6'], 'Preg. 3 - Ofrecimiento de Test Drive'), use_container_width=True, key="pie_td_i")
+                    v1.metric("Preg. 2 - Cortesía y Amabilidad del Asesor", f"{calcular_nps_detallado(df_base[MAPA['q4']])[0]:.1f}%")
+                    st.plotly_chart(crear_grafico_torta(df_base, MAPA['q6'], 'Preg. 3 - Ofrecimiento de Test Drive'), use_container_width=True, key="pie_td_i")
                 with stabs_int[1]:
                     e1, e2 = st.columns(2)
-                    val_p4_int, _ = calcular_csi_directo_porcentaje(df_base[MAPA['q8']])
-                    val_p5_int, _ = calcular_csi_directo_porcentaje(df_base[MAPA['q11']])
-                    with e1:
-                        st.plotly_chart(crear_gauge_moderno(val_p4_int, "Preg. 4 - Calidad de Info Pre-entrega", alto_grafico=250), use_container_width=True, key="gauge_p4_interna")
-                    with e2:
-                        st.plotly_chart(crear_gauge_moderno(val_p5_int, "Preg. 5 - Presentación y Estado del 0KM", alto_grafico=250), use_container_width=True, key="gauge_p5_interna")
+                    e1.metric("Preg. 4 - Calidad de Info Pre-entrega", f"{calcular_nps_detallado(df_base[MAPA['q8']])[0]:.1f}%")
+                    e2.metric("Preg. 5 - Presentación y Estado del 0KM", f"{calcular_nps_detallado(df_base[MAPA['q11']])[0]:.1f}%")
                 with stabs_int[2]:
                     p1, p2 = st.columns(2)
-                    val_p7_int, _ = calcular_csi_directo_porcentaje(df_base[MAPA['q15']])
-                    with p1:
-                        st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Preg. 6 - Recepción de Contacto Post-Entrega'), use_container_width=True, key="pie_post_i")
-                    with p2:
-                        st.plotly_chart(crear_gauge_moderno(val_p7_int, "Preg. 7 - Satisfacción con la llamada/whatsapp", alto_grafico=250), use_container_width=True, key="gauge_p7_interna")
+                    st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Preg. 6 - Recepción de Contacto Post-Entrega'), use_container_width=True, key="pie_post_i")
+                    p2.metric("Preg. 7 - Satisfacción con la llamada/whatsapp", f"{calcular_nps_detallado(df_base[MAPA['q15']])[0]:.1f}%")
 
             st.markdown("---")
             label_f = "Todos los registros" if st.session_state.filtro_val == "Todos" else f"Filtro activo: {st.session_state.filtro_val}"
