@@ -92,7 +92,7 @@ def crear_gauge_moderno(valor, titulo):
     return fig
 
 def crear_grafico_torta(df, columna_o_keyword, titulo):
-    # Buscador flexible de columnas por palabra clave
+    # Buscador flexible de columnas por palabra clave para evitar descalces por espacios o tildes
     columna_real = None
     for col in df.columns:
         if columna_o_keyword.lower() in col.lower():
@@ -101,7 +101,7 @@ def crear_grafico_torta(df, columna_o_keyword, titulo):
             
     if not columna_real: 
         fig = go.Figure()
-        fig.update_layout(title=titulo, annotations=[dict(text="No se encontró la columna en la planilla", showarrow=False, font=dict(size=12))])
+        fig.update_layout(title=titulo, annotations=[dict(text="Columna no encontrada", showarrow=False, font=dict(size=12))])
         return fig
     
     df_torta = df[[columna_real]].dropna().copy()
@@ -115,13 +115,22 @@ def crear_grafico_torta(df, columna_o_keyword, titulo):
     conteo = df_torta[columna_real].value_counts().reset_index()
     conteo.columns = ['Respuesta', 'Cantidad']
     
-    # Normalización completa de las respuestas afirmativas
-    conteo['Respuesta'] = conteo['Respuesta'].replace({'SÍ': 'SI', 'Sí': 'SI'})
+    # Normalización universal de variaciones afirmativas (SI / SÍ / SÍ, SE OFRECIÓ)
+    conteo['Respuesta'] = conteo['Respuesta'].replace({'SÍ': 'SI', 'SÍ, SE OFRECIÓ': 'SI', 'CONTACTADO': 'SI'})
+    conteo['Respuesta'] = conteo['Respuesta'].replace({'NO CONTACTADO': 'NO'})
+    
     total_respuestas = conteo['Cantidad'].sum()
     
-    # Extraer el indicador central de cumplimiento (Porcentaje de SÍ)
-    cant_si = conteo[conteo['Respuesta'] == 'SI']['Cantidad'].sum()
-    pct_si = (cant_si / total_respuestas) * 100 if total_respuestas > 0 else 0.0
+    # Intentamos calcular la porción dominante positiva para la métrica central de la dona
+    # Si no es binario (SI/NO), tomará la categoría más repetida por defecto
+    if 'SI' in conteo['Respuesta'].values:
+        cant_centro = conteo[conteo['Respuesta'] == 'SI']['Cantidad'].sum()
+        label_centro = "Sí"
+    else:
+        cant_centro = conteo.iloc[0]['Cantidad']
+        label_centro = str(conteo.iloc[0]['Respuesta']).title()
+        
+    pct_centro = (cant_centro / total_respuestas) * 100 if total_respuestas > 0 else 0.0
     
     colores_map = {'SI': '#28a745', 'NO': '#dc3545'}
     
@@ -131,23 +140,21 @@ def crear_grafico_torta(df, columna_o_keyword, titulo):
         values='Cantidad', 
         names='Respuesta', 
         title=titulo, 
-        hole=0.6,  # Hueco centrado optimizado para albergar el KPI numérico
+        hole=0.6,
         color='Respuesta',
-        color_discrete_map=colores_map
+        color_discrete_map=colores_map if 'SI' in conteo['Respuesta'].values else None,
+        color_discrete_sequence=px.colors.qualitative.Pastel if 'SI' not in conteo['Respuesta'].values else None
     )
-    
-    # Envía las etiquetas de porcentaje y detalle de forma sutil hacia afuera
     fig.update_traces(textinfo='percent+label', textposition='outside')
     
-    # Inserta la anotación métrica gigante en el núcleo de la dona
     fig.update_layout(
         height=240, 
         margin=dict(l=10, r=10, t=40, b=10), 
         showlegend=False,
         annotations=[dict(
-            text=f"<b>{pct_si:.1f}%</b><br><span style='font-size:11px;color:#666;font-weight:normal;'>Sí</span>", 
+            text=f"<b>{pct_centro:.1f}%</b><br><span style='font-size:11px;color:#666;'>{label_centro}</span>", 
             showarrow=False, 
-            font=dict(size=24, color='#28a745')
+            font=dict(size=24, color='#28a745' if label_centro == "Sí" else '#007bff')
         )]
     )
     return fig
@@ -193,9 +200,9 @@ try:
                 'q3': 'COMENTARIO DEL CLIENTE',
                 'q4': '2. ¿Cómo califica la cortesía y amabilidad del Vendedor / Asesor Comercial?',
                 'q5': None,
-                'q6': '3. ¿Le han ofrecido una prueba de manejo?',
-                'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo? (Comunicación y explicación de tramites administrativos)',
-                'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega? (explicaciones de las características, la limpieza y la presentación con el vehículo, entre otros aspectos.)',
+                'q6': 'prueba de manejo',
+                'q8': '4. ¿Cómo califica la información facilitada entre la compra y la entrega de su vehículo nuevo?',
+                'q11': '5. ¿Cómo califica la presentación de su 0KM al momento de la entrega?',
                 'q14': 'contacto del concesionario posterior', 
                 'q15': '7. ¿Cuán satisfecho se encuentra con el contacto posterior realizado por el concesionario?',
                 'lbl_q1': 'CSI GENERAL (PROMEDIO %)',
@@ -288,6 +295,7 @@ try:
             st.markdown("---")
             
             if base_seleccionada == "Encuestas de Marca":
+                # APLICACIÓN DE DONAS UNIFICADAS PARA ENCUESTAS DE MARCA
                 stabs = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
                 with stabs[0]:
                     v1, v2 = st.columns(2)
@@ -296,11 +304,13 @@ try:
                 with stabs[1]:
                     ct1, ct2 = st.columns(2)
                     ct1.metric("Q7 - Satisfacción Test Drive", f"{calcular_nps_detallado(df_base['Q7 - Satisfacción Test Drive'])[0]:.1f}%")
-                    st.plotly_chart(crear_grafico_torta(df_base, MAPA['q6'], 'Q6 - Ofrecimiento Test Drive'), use_container_width=True, key="pie_td_m")
+                    # Nueva Dona de Estado para Test Drive de Marca
+                    st.plotly_chart(crear_grafico_torta(df_base, MAPA['q6'], 'Q6 - Ofrecimiento Test Drive (Dona de Estado)'), use_container_width=True, key="pie_td_m_donut")
                 with stabs[2]:
                     cf1, cf2 = st.columns(2)
                     cf1.metric("Q10 - Satisfacción Financiación", f"{calcular_nps_detallado(df_base['Q10 - Satisfacción Financiación utilizada'])[0]:.1f}%")
-                    st.plotly_chart(crear_grafico_torta(df_base, 'Q9 - Financiación utilizada', 'Mix Ventas Financiadas'), use_container_width=True, key="pie_fin_m")
+                    # Nueva Dona de Estado para Mix de Financiación de Marca
+                    st.plotly_chart(crear_grafico_torta(df_base, 'Q9 - Financiación utilizada', 'Mix Ventas Financiadas (Dona de Estado)'), use_container_width=True, key="pie_fin_m_donut")
                 with stabs[3]:
                     ce1, ce2 = st.columns(2)
                     ce1.metric("Q8 - Info Pre-entrega", f"{calcular_nps_detallado(df_base[MAPA['q8']])[0]:.1f}%")
