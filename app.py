@@ -27,13 +27,13 @@ def load_data(url, tipo_base):
         if tipo_base == "Encuestas de Marca":
             df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
         else:
-            # Base Interna (Respetando las mayúsculas exactas de tu archivo)
+            # Base Interna
             df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de último contacto"], dayfirst=True, errors='coerce')
             df["MARCA"] = df["MARCA"]
             df["Canal de Venta"] = df["CANAL DE VENTA"]
             df["Vendedor"] = df["VENDEDOR"]
             
-            # Mapeo preventivo de la columna cliente para la tabla de comentarios
+            # Mapeo de la columna cliente para la tabla de comentarios
             if "Cliente" in df.columns:
                 df["Nombre de cliente"] = df["Cliente"]
             elif "Nombre de cliente" not in df.columns:
@@ -58,7 +58,6 @@ def calcular_csi_directo_porcentaje(serie):
     serie_limpia = limpiar_comas_a_numerico(serie).dropna()
     total = len(serie_limpia)
     if total == 0: return 0.0, 0
-    # Convierte el promedio de la columna CSI (escala 1-10) a escala % (1-100)
     promedio_porcentaje = (serie_limpia.mean()) * 10
     return promedio_porcentaje, total
 
@@ -140,7 +139,6 @@ def crear_grafico_torta(df, columna_o_keyword, titulo):
         color_discrete_map=colores_map if 'SI' in conteo['Respuesta'].values else None,
         color_discrete_sequence=px.colors.qualitative.Pastel if 'SI' not in conteo['Respuesta'].values else None
     )
-    
     fig.update_traces(textinfo='percent+label', textposition='outside')
     
     fig.update_layout(
@@ -157,6 +155,9 @@ def crear_grafico_torta(df, columna_o_keyword, titulo):
 
 # --- LÓGICA PRINCIPAL ---
 try:
+    if 'filtro_val' not in st.session_state: 
+        st.session_state.filtro_val = "Todos"
+
     st.sidebar.header("Origen de Datos")
     base_seleccionada = st.sidebar.radio(
         "Seleccione Tipo de Encuesta:",
@@ -246,8 +247,6 @@ try:
             "👤 Ficha Individual por Asesor"
         ])
 
-        if 'filtro_val' not in st.session_state: st.session_state.filtro_val = "Todos"
-
         # ==========================================================
         # TAB 1: MONITOR GLOBAL
         # ==========================================================
@@ -269,6 +268,8 @@ try:
             with c_q1:
                 st.plotly_chart(crear_gauge_moderno(val_q1, MAPA['lbl_q1']), use_container_width=True, key="gauge_autociel_q1")
                 col_b1, col_b2, col_b3 = st.columns(3)
+                
+                # Sincronización explícita mediante st.session_state con callback nativo
                 if col_b1.button(f"🟢 {p_q1} Prom", key="btn_f_q1_p"): 
                     st.session_state.filtro_val = "Promotor"; st.rerun()
                 if col_b2.button(f"🟡 {n_q1} Neu", key="btn_f_q1_n"): 
@@ -290,10 +291,13 @@ try:
 
             st.markdown("---")
             
-            # --- MEJORA CRÍTICA: FILTRADO DINÁMICO DE SUB-CHARTS ---
+            # --- CONEXIÓN DE FILTRO EN CASCADA COMPLETO ---
             df_sub_charts = df_base.copy()
             if st.session_state.filtro_val != "Todos":
                 df_sub_charts = df_sub_charts[df_sub_charts["Cat_Filtro_Dinamica"] == st.session_state.filtro_val]
+            
+            label_f = "Todos los registros" if st.session_state.filtro_val == "Todos" else f"Filtro activo: {st.session_state.filtro_val}"
+            st.markdown(f"**Segmentación actual en gráficos de procesos:** `{label_f}`")
             
             if base_seleccionada == "Encuestas de Marca":
                 stabs = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
@@ -355,7 +359,6 @@ try:
                         st.plotly_chart(crear_gauge_moderno(val_p7_int, "Preg. 7 - Satisfacción con el contacto posterior"), use_container_width=True, key="gauge_p7_int_sub")
 
             st.markdown("---")
-            label_f = "Todos los registros" if st.session_state.filtro_val == "Todos" else f"Filtro activo: {st.session_state.filtro_val}"
             st.subheader(f"💬 Comentarios y Verbalizaciones del Cliente ({label_f})")
             
             df_v = df_base[["Fecha de ultimo contacto", "Nombre de cliente", MAPA['q3'], "Vendedor", "Cat_Filtro_Dinamica"]].copy()
