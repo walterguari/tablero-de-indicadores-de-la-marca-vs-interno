@@ -95,19 +95,19 @@ def crear_grafico_torta(df, columna, titulo):
     if columna not in df.columns: 
         return go.Figure()
     
-    # Limpieza estricta de nulos y normalización de textos para procesar SI/NO efectivamente
-    df_limpio = df[[columna]].dropna()
-    df_limpio[columna] = df_limpio[columna].astype(str).str.strip().str.upper()
+    # Copia explícita para evitar advertencias de asignación y limpieza de nulos
+    df_torta = df[[columna]].dropna().copy()
+    df_torta[columna] = df_torta[columna].astype(str).str.strip().str.upper()
     
-    if df_limpio.empty:
+    if df_torta.empty:
         fig = go.Figure()
-        fig.update_layout(title=titulo, annotations=[dict(text="Sin datos registrados", showarrow=False, font=dict(size=13))])
+        fig.update_layout(title=titulo, annotations=[dict(text="Sin datos válidos", showarrow=False, font=dict(size=13))])
         return fig
         
-    conteo = df_limpio[columna].value_counts().reset_index()
+    conteo = df_torta[columna].value_counts().reset_index()
     conteo.columns = [columna, 'Cantidad']
     
-    # Mapeo explícito de colores (Verde para SI, Rojo para NO)
+    # Paleta limpia institucional: SI (Verde), NO (Rojo)
     colores_map = {'SI': '#28a745', 'SÍ': '#28a745', 'NO': '#dc3545'}
     
     fig = px.pie(
@@ -278,7 +278,7 @@ try:
                     ce1.metric("Q8 - Info Pre-entrega", f"{calcular_nps_detallado(df_base[MAPA['q8']])[0]:.1f}%")
                     ce2.metric("Q11 - Momento de la entrega", f"{calcular_nps_detallado(df_base[MAPA['q11']])[0]:.1f}%")
             else:
-                # SOLAPA INTERNA ACTUALIZADA CON FILTRO CORRECTO PARA LA TORTA
+                # SOLAPA INTERNA TOTALMENTE CORREGIDA POR WALTER
                 stabs_int = st.tabs(["🤝 Gestión Comercial", "📦 Procesos y Entrega", "📞 Contacto posterior"])
                 with stabs_int[0]:
                     v1, v2 = st.columns(2)
@@ -299,8 +299,8 @@ try:
                     p1, p2 = st.columns(2)
                     val_p7_int, _ = calcular_csi_directo_porcentaje(df_base[MAPA['q15']])
                     with p1:
-                        # Se dibuja la torta de la Pregunta 6 usando la función optimizada
-                        st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Preg. 6 - Recepción de Contacto Post-Entrega'), use_container_width=True, key="pie_post_i_final_v2")
+                        # Forzamos la lectura limpia de la columna de texto q14 directamente para evitar herencias
+                        st.plotly_chart(crear_grafico_torta(df_base, MAPA['q14'], 'Preg. 6 - Recepción de Contacto Post-Entrega'), use_container_width=True, key="pie_contacto_posterior_f")
                     with p2:
                         st.plotly_chart(crear_gauge_moderno(val_p7_int, "Preg. 7 - Satisfacción con el contacto posterior"), use_container_width=True, key="gauge_p7_int_sub")
 
