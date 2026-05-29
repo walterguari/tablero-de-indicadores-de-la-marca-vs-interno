@@ -157,6 +157,8 @@ def crear_grafico_torta(df, columna_o_keyword, titulo):
 try:
     if 'filtro_val' not in st.session_state: 
         st.session_state.filtro_val = "Todos"
+    if 'filtro_col' not in st.session_state: 
+        st.session_state.filtro_col = "Cat_Filtro_Dinamica"
 
     st.sidebar.header("Origen de Datos")
     base_seleccionada = st.sidebar.radio(
@@ -190,6 +192,7 @@ try:
                 if v >= 7: return "Neutro"
                 return "Detractor"
             df['Cat_Filtro_Dinamica'] = df[MAPA['q1']].apply(categorizar_marca)
+            df['Cat_Filtro_Q2'] = df[MAPA['q2']].apply(categorizar_marca)
         else:
             MAPA = {
                 'q1': 'CSI', 
@@ -206,12 +209,15 @@ try:
                 'lbl_q2': '1. RECOMENDACIÓN (NPS)'
             }
             serie_csi_limpia = limpiar_comas_a_numerico(df[MAPA['q1']])
+            serie_q2_limpia = limpiar_comas_a_numerico(df[MAPA['q2']])
+            
             def categorizar_interna(v):
                 if pd.isna(v): return "Sin Datos"
                 if v >= 9.0: return "Promotor"
                 if v >= 7.0: return "Neutro"
                 return "Detractor"
             df['Cat_Filtro_Dinamica'] = serie_csi_limpia.apply(categorizar_interna)
+            df['Cat_Filtro_Q2'] = serie_q2_limpia.apply(categorizar_interna)
 
         # --- SIDEBAR (FILTROS GLOBALES) ---
         st.sidebar.markdown("---")
@@ -265,23 +271,43 @@ try:
             nps_q2, p_q2, n_q2, d_q2, _ = calcular_nps_detallado(df_base[MAPA['q2']])
 
             c_q1, c_q2, c_tot = st.columns([2.2, 2.2, 0.6])
+            
+            # --- COLUMNA 1: GRÁFICO Q1 Y INTERACCIÓN ---
             with c_q1:
                 st.plotly_chart(crear_gauge_moderno(val_q1, MAPA['lbl_q1']), use_container_width=True, key="gauge_autociel_q1")
                 col_b1, col_b2, col_b3 = st.columns(3)
                 
-                # Sincronización explícita mediante st.session_state con callback nativo
                 if col_b1.button(f"🟢 {p_q1} Prom", key="btn_f_q1_p"): 
-                    st.session_state.filtro_val = "Promotor"; st.rerun()
+                    st.session_state.filtro_col = "Cat_Filtro_Dinamica"
+                    st.session_state.filtro_val = "Promotor"
+                    st.rerun()
                 if col_b2.button(f"🟡 {n_q1} Neu", key="btn_f_q1_n"): 
-                    st.session_state.filtro_val = "Neutro"; st.rerun()
+                    st.session_state.filtro_col = "Cat_Filtro_Dinamica"
+                    st.session_state.filtro_val = "Neutro"
+                    st.rerun()
                 if col_b3.button(f"🔴 {d_q1} Det", key="btn_f_q1_d"): 
-                    st.session_state.filtro_val = "Detractor"; st.rerun()
+                    st.session_state.filtro_col = "Cat_Filtro_Dinamica"
+                    st.session_state.filtro_val = "Detractor"
+                    st.rerun()
+                    
+            # --- COLUMNA 2: GRÁFICO Q2 Y INTERACCIÓN (¡CORREGIDO!) ---
             with c_q2:
                 st.plotly_chart(crear_gauge_moderno(nps_q2, MAPA['lbl_q2']), use_container_width=True, key="gauge_autociel_q2")
                 col_b4, col_b5, col_b6 = st.columns(3)
-                if col_b4.button(f"🟢 {p_q2} Muest", key="btn_f_q2_p"): pass
-                if col_b5.button(f"🟡 {n_q2} Muest", key="btn_f_q2_n"): pass
-                if col_b6.button(f"🔴 {d_q2} Muest", key="btn_f_q2_d"): pass
+                
+                if col_b4.button(f"🟢 {p_q2} Prom", key="btn_f_q2_p"):
+                    st.session_state.filtro_col = "Cat_Filtro_Q2" if base_seleccionada == "Encuestas Internas" else "Cat_Filtro_Dinamica"
+                    st.session_state.filtro_val = "Promotor"
+                    st.rerun()
+                if col_b5.button(f"🟡 {n_q2} Neu", key="btn_f_q2_n"):
+                    st.session_state.filtro_col = "Cat_Filtro_Q2" if base_seleccionada == "Encuestas Internas" else "Cat_Filtro_Dinamica"
+                    st.session_state.filtro_val = "Neutro"
+                    st.rerun()
+                if col_b6.button(f"🔴 {d_q2} Det", key="btn_f_q2_d"):
+                    st.session_state.filtro_col = "Cat_Filtro_Q2" if base_seleccionada == "Encuestas Internas" else "Cat_Filtro_Dinamica"
+                    st.session_state.filtro_val = "Detractor"
+                    st.rerun()
+                    
             with c_tot:
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 st.metric("Muestra", t_q1)
@@ -294,7 +320,8 @@ try:
             # --- CONEXIÓN DE FILTRO EN CASCADA COMPLETO ---
             df_sub_charts = df_base.copy()
             if st.session_state.filtro_val != "Todos":
-                df_sub_charts = df_sub_charts[df_sub_charts["Cat_Filtro_Dinamica"] == st.session_state.filtro_val]
+                col_a_filtrar = st.session_state.get('filtro_col', 'Cat_Filtro_Dinamica')
+                df_sub_charts = df_sub_charts[df_sub_charts[col_a_filtrar] == st.session_state.filtro_val]
             
             label_f = "Todos los registros" if st.session_state.filtro_val == "Todos" else f"Filtro activo: {st.session_state.filtro_val}"
             st.markdown(f"**Segmentación actual en gráficos de procesos:** `{label_f}`")
@@ -361,14 +388,16 @@ try:
             st.markdown("---")
             st.subheader(f"💬 Comentarios y Verbalizaciones del Cliente ({label_f})")
             
-            df_v = df_base[["Fecha de ultimo contacto", "Nombre de cliente", MAPA['q3'], "Vendedor", "Cat_Filtro_Dinamica"]].copy()
+            df_v = df_base.copy()
             if st.session_state.filtro_val != "Todos":
-                df_v = df_v[df_v["Cat_Filtro_Dinamica"] == st.session_state.filtro_val]
+                col_a_filtrar = st.session_state.get('filtro_col', 'Cat_Filtro_Dinamica')
+                df_v = df_v[df_v[col_a_filtrar] == st.session_state.filtro_val]
             
+            df_v = df_v[["Fecha de ultimo contacto", "Nombre de cliente", MAPA['q3'], "Vendedor"]].copy()
             df_v = df_v.sort_values("Fecha de ultimo contacto", ascending=False)
             df_v["Fecha de ultimo contacto"] = df_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
             
-            st.dataframe(df_v[["Fecha de ultimo contacto", "Nombre de cliente", MAPA['q3'], "Vendedor"]].rename(columns={MAPA['q3']: 'Comentario textual / Concatenado'}), use_container_width=True, hide_index=True)
+            st.dataframe(df_v.rename(columns={MAPA['q3']: 'Comentario textual / Concatenado'}), use_container_width=True, hide_index=True)
 
         # ==========================================================
         # TAB 2: TABLA UNIFICADA DE ASESORES
