@@ -83,7 +83,7 @@ def crear_gauge_moderno(valor, titulo):
         title = {'text': f"<b>{titulo}</b>", 'font': {'size': 12, 'color': '#333'}},
         number = {'suffix': "%", 'font': {'size': 26}, 'valueformat': '.1f'},
         gauge = {
-            'axis': {'range': [0, 100], 'visible': False},
+            'axis': {'range': [-100, 100], 'visible': False}, # Rango de -100 a 100 válido para lógicas NPS
             'bar': {'color': color_viva, 'thickness': 0.15},
             'bgcolor': "#f0f0f0",
             'threshold': {'line': {'color': "black", 'width': 3}, 'thickness': 0.8, 'value': 94}
@@ -168,7 +168,7 @@ try:
     
     if not df_m.empty and not df_i.empty:
         
-        # MAPEO DE COLUMNAS (Incluye Q13)
+        # MAPEO DE COLUMNAS
         MAPA_M = {
             'q1': 'Q1 - Satisfacción general', 'q2': 'Q2 - Recomendación - Concesionario', 'q3': 'Q3 - Verbalización',
             'q4': 'Q4 - Cortesía y amabilidad', 'q5': 'Q5 - Competencia Vendedor', 'q6': 'Q6 - Ofrecimiento Test Drive',
@@ -192,7 +192,7 @@ try:
         df_m["Fecha de ultimo contacto"] = pd.to_datetime(df_m["Fecha de ultimo contacto"], errors='coerce')
         df_i["Fecha de ultimo contacto"] = pd.to_datetime(df_i["Fecha de ultimo contacto"], errors='coerce')
 
-        # Categorizaciones estructurales para clics
+        # Categorizaciones estructurales para clics basadas en NPS (9 y 10 Promotores)
         def generar_categorias(val):
             v = pd.to_numeric(val, errors='coerce')
             if pd.isna(v): return "Sin Datos"
@@ -283,41 +283,33 @@ try:
                     df_m_sub = df_m_sub[df_m_sub[st.session_state.filtro_col_m] == st.session_state.filtro_val_m]
                 
                 st.markdown(f"**Segmentación actual Marca:** `{st.session_state.filtro_val_m}`")
-                
                 stabs_m = st.tabs(["🤝 Gestión Comercial", "🚗 Test Drive", "💰 Finanzas", "📦 Procesos y Entrega", "📞 Contacto Posterior"])
                 
                 with stabs_m[0]:
                     v1, v2 = st.columns(2)
-                    v1.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_m_sub[MAPA_M['q4']])[0], "Q4 - Cortesía y Amabilidad"), use_container_width=True, key="g_m_q4")
-                    v2.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_m_sub[MAPA_M['q5']])[0], "Q5 - Competencia Vendedor"), use_container_width=True, key="g_m_q5")
+                    v1.plotly_chart(crear_gauge_moderno(calcular_nps_detallado(df_m_sub[MAPA_M['q4']])[0], "Q4 - Cortesía y Amabilidad (NPS)"), use_container_width=True, key="g_m_q4")
+                    v2.plotly_chart(crear_gauge_moderno(calcular_nps_detallado(df_m_sub[MAPA_M['q5']])[0], "Q5 - Competencia Vendedor (NPS)"), use_container_width=True, key="g_m_q5")
                 with stabs_m[1]:
                     ct1, ct2 = st.columns(2)
-                    ct1.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_m_sub['Q7 - Satisfacción Test Drive'])[0], "Q7 - Sat. Test Drive"), use_container_width=True, key="g_m_q7")
+                    ct1.plotly_chart(crear_gauge_moderno(calcular_nps_detallado(df_m_sub['Q7 - Satisfacción Test Drive'])[0], "Q7 - Sat. Test Drive (NPS)"), use_container_width=True, key="g_m_q7")
                     ct2.plotly_chart(crear_grafico_torta(df_m_sub, MAPA_M['q6'], 'Q6 - Ofrecimiento Test Drive'), use_container_width=True, key="p_m_q6")
                 with stabs_m[2]:
                     cf1, cf2 = st.columns(2)
-                    cf1.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_m_sub['Q10 - Satisfacción Financiación utilizada'])[0], "Q10 - Sat. Financiación"), use_container_width=True, key="g_m_q10")
+                    cf1.plotly_chart(crear_gauge_moderno(calcular_nps_detallado(df_m_sub['Q10 - Satisfacción Financiación utilizada'])[0], "Q10 - Sat. Financiación (NPS)"), use_container_width=True, key="g_m_q10")
                     cf2.plotly_chart(crear_grafico_torta(df_m_sub, 'Q9 - Financiación utilizada', 'Mix Ventas Financiadas'), use_container_width=True, key="p_m_q9")
-                
-                # REESTRUCTURACIÓN DE LA PESTAÑA PROCESOS Y ENTREGA CON Q13 DESTACADO
                 with stabs_m[3]:
-                    # Fila Superior: Indicador Macro (Q13) Centrado de forma jerárquica
                     _, col_macro, _ = st.columns([0.5, 3.0, 0.5])
                     with col_macro:
-                        q13_val, _ = calcular_csi_directo_porcentaje(df_m_sub[MAPA_M['q13']])
-                        st.plotly_chart(crear_gauge_moderno(q13_val, "⭐ Q13 - Satisfacción Entrega General (Macro)"), use_container_width=True, key="g_m_q13")
-                    
+                        q13_val = calcular_nps_detallado(df_m_sub[MAPA_M['q13']])[0]
+                        st.plotly_chart(crear_gauge_moderno(q13_val, "⭐ Q13 - Satisfacción Entrega General (NPS)"), use_container_width=True, key="g_m_q13")
                     st.markdown("<hr style='margin:5px 0px; border-color:#eee;'>", unsafe_allow_html=True)
-                    
-                    # Fila Inferior: Indicadores de Soporte Operativo
                     ce1, ce2 = st.columns(2)
-                    ce1.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_m_sub[MAPA_M['q8']])[0], "Q8 - Info Pre-entrega"), use_container_width=True, key="g_m_q8")
-                    ce2.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_m_sub[MAPA_M['q11']])[0], "Q11 - Momento de la entrega"), use_container_width=True, key="g_m_q11")
-                
+                    ce1.plotly_chart(crear_gauge_moderno(calcular_nps_detallado(df_m_sub[MAPA_M['q8']])[0], "Q8 - Info Pre-entrega (NPS)"), use_container_width=True, key="g_m_q8")
+                    ce2.plotly_chart(crear_gauge_moderno(calcular_nps_detallado(df_m_sub[MAPA_M['q11']])[0], "Q11 - Momento de la entrega (NPS)"), use_container_width=True, key="g_m_q11")
                 with stabs_m[4]:
                     cp1, cp2 = st.columns(2)
                     cp1.plotly_chart(crear_grafico_torta(df_m_sub, MAPA_M['q14'], 'Q14 - Contactado Posterior'), use_container_width=True, key="p_m_q14")
-                    cp2.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_m_sub[MAPA_M['q15']])[0], "Q15 - Sat. con el Contacto"), use_container_width=True, key="g_m_q15")
+                    cp2.plotly_chart(crear_gauge_moderno(calcular_nps_detallado(df_m_sub[MAPA_M['q15']])[0], "Q15 - Sat. con el Contacto (NPS)"), use_container_width=True, key="g_m_q15")
 
                 st.markdown("##### 💬 Verbalizaciones del Cliente (Marca)")
                 df_m_v = df_m_sub[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_M['q3'], "Vendedor"]].copy().sort_values("Fecha de ultimo contacto", ascending=False)
@@ -327,6 +319,7 @@ try:
             # --- PANEL INTERNO (DERECHA) ---
             with sc_interna:
                 st.markdown("### 🎯 Datos de Origen: Encuestas Internas")
+                # CSI General de encuesta interna queda como promedio de forma exclusiva
                 val_i_q1, t_i_q1 = calcular_csi_directo_porcentaje(df_i_base[MAPA_I['q1']])
                 serie_csi = limpiar_comas_a_numerico(df_i_base[MAPA_I['q1']]).dropna()
                 p_i_q1 = (serie_csi >= 9.0).sum()
@@ -357,23 +350,22 @@ try:
                     df_i_sub = df_i_sub[df_i_sub[st.session_state.filtro_col_i] == st.session_state.filtro_val_i]
                 
                 st.markdown(f"**Segmentación actual Interna:** `{st.session_state.filtro_val_i}`")
-                
                 stabs_i = st.tabs(["🤝 Gestión Comercial", "🚗 Test Drive", "📦 Procesos y Entrega", "📞 Contacto posterior"])
                 
                 with stabs_i[0]:
                     vi1, _ = st.columns([2, 2])
-                    vi1.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_i_sub[MAPA_I['q4']])[0], "Preg. 2 - Cortesía y Amabilidad"), use_container_width=True, key="g_i_p2")
+                    vi1.plotly_chart(crear_gauge_moderno(calcular_nps_detallado(df_i_sub[MAPA_I['q4']])[0], "Preg. 2 - Cortesía y Amabilidad (NPS)"), use_container_width=True, key="g_i_p2")
                 with stabs_i[1]:
                     v_test, _ = st.columns([2, 2])
                     v_test.plotly_chart(crear_grafico_torta(df_i_sub, MAPA_I['q6'], 'Preg. 3 - Ofrecimiento de Test Drive'), use_container_width=True, key="p_i_p3")
                 with stabs_i[2]:
                     ei1, ei2 = st.columns(2)
-                    ei1.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_i_sub[MAPA_I['q8']])[0], "Preg. 4 - Calidad de Info Pre-entrega"), use_container_width=True, key="g_i_p4")
-                    ei2.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_i_sub[MAPA_I['q11']])[0], "Preg. 5 - Presentación del 0KM"), use_container_width=True, key="g_i_p5")
+                    ei1.plotly_chart(crear_gauge_moderno(calcular_nps_detallado(df_i_sub[MAPA_I['q8']])[0], "Preg. 4 - Calidad de Info Pre-entrega (NPS)"), use_container_width=True, key="g_i_p4")
+                    ei2.plotly_chart(crear_gauge_moderno(calcular_nps_detallado(df_i_sub[MAPA_I['q11']])[0], "Preg. 5 - Presentación del 0KM (NPS)"), use_container_width=True, key="g_i_p5")
                 with stabs_i[3]:
                     pi1, pi2 = st.columns(2)
                     pi1.plotly_chart(crear_grafico_torta(df_i_sub, MAPA_I['q14'], 'Preg. 6 - Recepción Contacto'), use_container_width=True, key="p_i_p6")
-                    pi2.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_i_sub[MAPA_I['q15']])[0], "Preg. 7 - Sat. Contacto Posterior"), use_container_width=True, key="g_i_p7")
+                    pi2.plotly_chart(crear_gauge_moderno(calcular_nps_detallado(df_i_sub[MAPA_I['q15']])[0], "Preg. 7 - Sat. Contacto Posterior (NPS)"), use_container_width=True, key="g_i_p7")
 
                 st.markdown("##### 💬 Verbalizaciones del Cliente (Internas)")
                 df_i_v = df_i_sub[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_I['q3'], "Vendedor"]].copy().sort_values("Fecha de ultimo contacto", ascending=False)
@@ -381,10 +373,12 @@ try:
                 st.dataframe(df_i_v.rename(columns={MAPA_I['q3']: 'Comentario Textual'}), use_container_width=True, hide_index=True, height=220)
 
         # ==========================================================
-        # TAB 2: TABLA UNIFICADA DE ASESORES (CRUZA AMBAS FUENTES)
+        # TAB 2: TABLA UNIFICADA DE ASESORES (MÉTRICAS AJUSTADAS A NPS)
         # ==========================================================
         with tab_unificada:
             st.header("Ranking de Performance Comercial Integrado")
+            st.markdown("Evaluación unificada bajo la metodología estricta de **NPS** para todos los indicadores operativos.")
+            
             vendedores_unificados = sorted(list(set(df_m_base["Vendedor"].dropna().unique()) | set(df_i_base["Vendedor"].dropna().unique())))
             
             if vendedores_unificados:
@@ -393,45 +387,54 @@ try:
                     data_m = df_m_base[df_m_base["Vendedor"] == vend]
                     data_i = df_i_base[df_i_base["Vendedor"] == vend]
                     
+                    # Cálculos con lógica NPS en Marca
                     if not data_m.empty:
                         nm_q2, pm_q2, _, dm_q2, tm_q2 = calcular_nps_detallado(data_m[MAPA_M['q2']])
+                        cortesia_m = calcular_nps_detallado(data_m[MAPA_M['q4']])[0]
+                        competencia_m = calcular_nps_detallado(data_m[MAPA_M['q5']])[0]
                         target_m = calcular_faltante_94(pm_q2, dm_q2, tm_q2)
                     else:
-                        nm_q2, target_m, tm_q2 = 0.0, "Sin registros", 0
+                        nm_q2, cortesia_m, competencia_m, target_m, tm_q2 = 0.0, 0.0, 0.0, "Sin registros", 0
                         
+                    # Cálculos con lógica NPS en Interna
                     if not data_i.empty:
                         ni_q2, pi_q2, _, di_q2, ti_q2 = calcular_nps_detallado(data_i[MAPA_I['q2']])
+                        cortesia_i = calcular_nps_detallado(data_i[MAPA_I['q4']])[0]
                         target_i = calcular_faltante_94(pi_q2, di_q2, ti_q2)
                     else:
-                        ni_q2, target_i, ti_q2 = 0.0, "Sin registros", 0
+                        ni_q2, cortesia_i, target_i, ti_q2 = 0.0, 0.0, "Sin registros", 0
                     
                     resumen_master.append({
                         "Asesor Comercial": vend,
-                        "NPS Rec. (MARCA)": round(nm_q2, 1) if tm_q2 > 0 else "Sin Datos",
-                        "Faltante Obj. M (94%)": target_m,
                         "Muestra M": tm_q2,
+                        "NPS Rec. (MARCA)": round(nm_q2, 1) if tm_q2 > 0 else "Sin Datos",
+                        "Cortesía M (NPS)": round(cortesia_m, 1) if tm_q2 > 0 else "Sin Datos",
+                        "Competencia M (NPS)": round(competencia_m, 1) if tm_q2 > 0 else "Sin Datos",
+                        "Faltante Obj. M (94%)": target_m,
+                        "Muestra I": ti_q2,
                         "NPS Rec. (INTERNA)": round(ni_q2, 1) if ti_q2 > 0 else "Sin Datos",
-                        "Faltante Obj. I (94%)": target_i,
-                        "Muestra I": ti_q2
+                        "Cortesía I (NPS)": round(cortesia_i, 1) if ti_q2 > 0 else "Sin Datos",
+                        "Faltante Obj. I (94%)": target_i
                     })
                 
                 df_master = pd.DataFrame(resumen_master).sort_values("Muestra M", ascending=False)
                 
-                def color_celda_nps(val):
+                # Reglas de formato condicional (Aptas para rangos NPS de -100 a 100)
+                def color_celda_nps_master(val):
                     try:
                         v = float(val)
-                        if v >= 94: return 'background-color: #d4edda; color: #155724; font-weight: bold'
-                        if v >= 90: return 'background-color: #fff3cd; color: #856404; font-weight: bold'
-                        return 'background-color: #f8d7da; color: #721c24; font-weight: bold'
+                        if v >= 94: return 'background-color: #d4edda; color: #155724; font-weight: bold; text-align: center;'
+                        if v >= 90: return 'background-color: #fff3cd; color: #856404; font-weight: bold; text-align: center;'
+                        return 'background-color: #f8d7da; color: #721c24; font-weight: bold; text-align: center;'
                     except:
-                        return ''
+                        return 'text-align: center; color: #999;'
 
-                df_styled = df_master.style.map(color_celda_nps, subset=["NPS Rec. (MARCA)", "NPS Rec. (INTERNA)"])\
-                                           .map(lambda x: 'color: #721c24; font-weight: bold' if '🚨' in str(x) else 'color: #155724', subset=['Faltante Obj. M (94%)', 'Faltante Obj. I (94%)'])
+                df_styled = df_master.style.map(color_celda_nps_master, subset=["NPS Rec. (MARCA)", "Cortesía M (NPS)", "Competencia M (NPS)", "NPS Rec. (INTERNA)", "Cortesía I (NPS)"])\
+                                           .map(lambda x: 'color: #721c24; font-weight: bold; text-align: center;' if '🚨' in str(x) else 'color: #155724; text-align: center;', subset=['Faltante Obj. M (94%)', 'Faltante Obj. I (94%)'])
                 st.dataframe(df_styled, use_container_width=True, hide_index=True)
 
         # ==========================================================
-        # TAB 3: FICHA INDIVIDUAL POR ASESOR (CRUZADO HISTÓRICO)
+        # TAB 3: FICHA INDIVIDUAL POR ASESOR
         # ==========================================================
         with tab_individual:
             st.header("Evolución Histórica por Asesor (Comparativa de Fuentes)")
@@ -464,7 +467,7 @@ try:
                             fig_m = px.line(df_ev_m, x="Periodo_Str", y="NPS", text=df_ev_m["NPS"].round(1).astype(str) + "%", labels={"Periodo_Str": "Mes", "NPS": "NPS Marca %"}, markers=True)
                             fig_m.add_hline(y=94, line_dash="dash", line_color="green", annotation_text="Objetivo (94%)")
                             fig_m.update_traces(textposition="top center", line=dict(color='#28a745', width=3))
-                            fig_m.update_layout(yaxis=dict(range=[-10, 110]), height=240, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                            fig_m.update_layout(yaxis=dict(range=[-100, 110]), height=240, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                             st.plotly_chart(fig_m, use_container_width=True, key="linea_ev_marca")
                     else:
                         st.info("Sin registros en la base de Marca para este asesor.")
@@ -490,7 +493,7 @@ try:
                             fig_i = px.line(df_ev_i, x="Periodo_Str", y="NPS", text=df_ev_i["NPS"].round(1).astype(str) + "%", labels={"Periodo_Str": "Mes", "NPS": "NPS Interno %"}, markers=True)
                             fig_i.add_hline(y=94, line_dash="dash", line_color="green", annotation_text="Objetivo (94%)")
                             fig_i.update_traces(textposition="top center", line=dict(color='#007bff', width=3))
-                            fig_i.update_layout(yaxis=dict(range=[-10, 110]), height=240, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                            fig_i.update_layout(yaxis=dict(range=[-100, 110]), height=240, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                             st.plotly_chart(fig_i, use_container_width=True, key="linea_ev_interna")
                     else:
                         st.info("Sin registros en la base Interna para este asesor.")
