@@ -27,8 +27,9 @@ def load_data(url, tipo_base):
         if tipo_base == "Encuestas de Marca":
             df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
         else:
-            # Base Interna
-            df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de último contacto"], dayfirst=True, errors='coerce')
+            # Base Interna - Validamos variantes de acentos para evitar fallas de lectura
+            col_fecha = "Fecha de último contacto" if "Fecha de último contacto" in df.columns else "Fecha de ultimo contacto"
+            df["Fecha de ultimo contacto"] = pd.to_datetime(df[col_fecha], dayfirst=True, errors='coerce')
             df["MARCA"] = df["MARCA"]
             df["Canal de Venta"] = df["CANAL DE VENTA"]
             df["Vendedor"] = df["VENDEDOR"]
@@ -59,7 +60,6 @@ def calcular_csi_directo_porcentaje(serie):
     total = len(serie_limpia)
     if total == 0: return 0.0, 0
     average_val = serie_limpia.mean()
-    # Si la escala ya viene de 0 a 100, no multiplicamos por 10
     promedio_porcentaje = average_val * 10 if average_val <= 10 else average_val
     return promedio_porcentaje, total
 
@@ -157,7 +157,6 @@ def crear_grafico_torta(df, columna_o_keyword, titulo):
 
 # --- LÓGICA PRINCIPAL ---
 try:
-    # Inicialización de Filtros de Botones Independientes (para no mezclar clicks de Marca con Interna)
     if 'filtro_val_m' not in st.session_state: st.session_state.filtro_val_m = "Todos"
     if 'filtro_col_m' not in st.session_state: st.session_state.filtro_col_m = "Cat_Filtro_Dinamica"
     if 'filtro_val_i' not in st.session_state: st.session_state.filtro_val_i = "Todos"
@@ -188,6 +187,10 @@ try:
             'lbl_q1': 'CSI GENERAL (PROMEDIO %)', 'lbl_q2': '1. RECOMENDACIÓN (NPS)'
         }
 
+        # Asegurar conversión explícita a Datetime antes de extraer partes de la fecha (¡Solución al Error!)
+        df_m["Fecha de ultimo contacto"] = pd.to_datetime(df_m["Fecha de ultimo contacto"], errors='coerce')
+        df_i["Fecha de ultimo contacto"] = pd.to_datetime(df_i["Fecha de ultimo contacto"], errors='coerce')
+
         # Categorizaciones estructurales para clicks
         def generar_categorias(val):
             v = pd.to_numeric(val, errors='coerce')
@@ -207,9 +210,8 @@ try:
         df_m['Anio'] = df_m["Fecha de ultimo contacto"].dt.year
         df_m['Mes_Num'] = df_m["Fecha de ultimo contacto"].dt.month
         df_i['Anio'] = df_i["Fecha de ultimo contacto"].dt.year
-        df_i['Mes_Num'] = df_i["Fecha de último contacto"].dt.month
+        df_i['Mes_Num'] = df_i["Fecha de ultimo contacto"].dt.month
         
-        # Universo de años y meses cruzados
         anios_combinados = sorted(list(set(df_m['Anio'].dropna().unique().astype(int)) | set(df_i['Anio'].dropna().unique().astype(int))), reverse=True)
         anio_sel = st.sidebar.selectbox("Año", options=anios_combinados if anios_combinados else [2026], key="sb_anio_unif")
         
@@ -221,21 +223,17 @@ try:
         meses_sel_nombres = st.sidebar.multiselect("Seleccione Mes(es)", options=meses_disp_nombres, default=meses_disp_nombres[-1:], key="sb_meses_unif")
         meses_sel_nums = [k for k, v in meses_n.items() if v in meses_sel_nombres]
 
-        # Segmentación por tiempo
         df_m_time = df_m[(df_m["Anio"] == anio_sel) & (df_m["Mes_Num"].isin(meses_sel_nums))]
         df_i_time = df_i[(df_i["Anio"] == anio_sel) & (df_i["Mes_Num"].isin(meses_sel_nums))]
 
-        # Universo unificado de marcas
         marcas_disponibles = sorted(list(set(df_m_time["MARCA"].dropna().unique()) | set(df_i_time["MARCA"].dropna().unique())))
         marcas = st.sidebar.multiselect("MARCA", options=marcas_disponibles, default=marcas_disponibles, key="sb_marcas_unif")
 
-        # Universo unificado de canales
         canales_m = set(df_m_time[df_m_time["MARCA"].isin(marcas)]["Canal de Venta"].dropna().unique())
         canales_i = set(df_i_time[df_i_time["MARCA"].isin(marcas)]["Canal de Venta"].dropna().unique())
         canales_disponibles = sorted(list(canales_m | canales_i))
         canales = st.sidebar.multiselect("Canal de Venta", options=canales_disponibles, default=canales_disponibles, key="sb_canales_unif")
 
-        # Filtros de bases base definitivos
         df_m_base = df_m_time[(df_m_time["MARCA"].isin(marcas)) & (df_m_time["Canal de Venta"].isin(canales))]
         df_i_base = df_i_time[(df_i_time["MARCA"].isin(marcas)) & (df_i_time["Canal de Venta"].isin(canales))]
 
@@ -279,12 +277,13 @@ try:
                     st.metric("Muestra", t_m_q1)
                     if st.button("🔄 Ver Todos", key="btn_clear_m"): st.session_state.filtro_val_m = "Todos"; st.rerun()
 
-                # Cascadas Internas de Marca
                 df_m_sub = df_m_base.copy()
                 if st.session_state.filtro_val_m != "Todos":
                     df_m_sub = df_m_sub[df_m_sub[st.session_state.filtro_col_m] == st.session_state.filtro_val_m]
                 
                 st.markdown(f"**Segmentación actual Marca:** `{st.session_state.filtro_val_m}`")
+                
+                # REESTRUCTURACIÓN DE SUBPESTAÑAS MARCA (¡Actualizado según captura!)
                 stabs_m = st.tabs(["🤝 Gestión Comercial", "🚗 Test Drive", "💰 Finanzas", "📦 Procesos y Entrega", "📞 Contacto Posterior"])
                 
                 with stabs_m[0]:
@@ -321,7 +320,7 @@ try:
                 p_i_q1 = (serie_csi >= 9.0).sum()
                 n_i_q1 = ((serie_csi >= 7.0) & (serie_csi < 9.0)).sum()
                 d_i_q1 = (serie_csi < 7.0).sum()
-                nps_i_q2, p_i_q2, n_i_q2, d_i_q2, _ = calcular_nps_detallado(df_i_base[MAPA_I['q2']])
+                nps_i_q2, p_i_q2, n_i_q2, d_i_q2, _ = calcular_nPS_detallado(df_i_base[MAPA_I['q2']])
 
                 ci_q1, ci_q2, ci_tot = st.columns([2.2, 2.2, 0.8])
                 with ci_q1:
@@ -341,12 +340,13 @@ try:
                     st.metric("Muestra", t_i_q1)
                     if st.button("🔄 Ver Todos", key="btn_clear_i"): st.session_state.filtro_val_i = "Todos"; st.rerun()
 
-                # Cascadas Internas de Internas
                 df_i_sub = df_i_base.copy()
                 if st.session_state.filtro_val_i != "Todos":
                     df_i_sub = df_i_sub[df_i_sub[st.session_state.filtro_col_i] == st.session_state.filtro_val_i]
                 
                 st.markdown(f"**Segmentación actual Interna:** `{st.session_state.filtro_val_i}`")
+                
+                # REESTRUCTURACIÓN DE SUBPESTAÑAS INTERNAS (¡Actualizado según captura!)
                 stabs_i = st.tabs(["🤝 Gestión Comercial", "🚗 Test Drive", "📦 Procesos y Entrega", "📞 Contacto posterior"])
                 
                 with stabs_i[0]:
@@ -374,7 +374,6 @@ try:
         # ==========================================================
         with tab_unificada:
             st.header("Ranking de Performance Comercial Integrado")
-            
             vendedores_unificados = sorted(list(set(df_m_base["Vendedor"].dropna().unique()) | set(df_i_base["Vendedor"].dropna().unique())))
             
             if vendedores_unificados:
@@ -418,7 +417,6 @@ try:
 
                 df_styled = df_master.style.map(color_celda_nps, subset=["NPS Rec. (MARCA)", "NPS Rec. (INTERNA)"])\
                                            .map(lambda x: 'color: #721c24; font-weight: bold' if '🚨' in str(x) else 'color: #155724', subset=['Faltante Obj. M (94%)', 'Faltante Obj. I (94%)'])
-                
                 st.dataframe(df_styled, use_container_width=True, hide_index=True)
 
         # ==========================================================
@@ -426,11 +424,10 @@ try:
         # ==========================================================
         with tab_individual:
             st.header("Evolución Histórica por Asesor (Comparativa de Fuentes)")
-            
             vendedores_disponibles = sorted(list(set(df_m_base["Vendedor"].dropna().unique()) | set(df_i_base["Vendedor"].dropna().unique())))
+            
             if vendedores_disponibles:
                 vendedor_sel = st.selectbox("Seleccione el Asesor a evaluar:", options=vendedores_disponibles, key="sb_vendedor_unif")
-                
                 st.markdown(f"### Desempeño de: **{vendedor_sel}**")
                 
                 col_ficha_m, col_ficha_i = st.columns(2)
@@ -450,7 +447,6 @@ try:
                         
                         df_ev_m = pd.DataFrame(resumen_mensual_m).sort_values("Periodo")
                         vm_q2, _, _, _, tv2 = calcular_nps_detallado(df_vend_m[MAPA_M['q2']])
-                        
                         st.metric("NPS Recomendación Actual (Marca)", f"{vm_q2:.1f}%", f"Muestra: {tv2} encuestas")
                         
                         if not df_ev_m.empty:
@@ -477,7 +473,6 @@ try:
                         
                         df_ev_i = pd.DataFrame(resumen_mensual_i).sort_values("Periodo")
                         vi_q2, _, _, _, tv2_i = calcular_nps_detallado(df_vend_i[MAPA_I['q2']])
-                        
                         st.metric("NPS Recomendación Actual (Interno)", f"{vi_q2:.1f}%", f"Muestra: {tv2_i} encuestas")
                         
                         if not df_ev_i.empty:
