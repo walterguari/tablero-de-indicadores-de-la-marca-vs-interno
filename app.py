@@ -187,7 +187,7 @@ try:
             'lbl_q1': 'CSI GENERAL (PROMEDIO %)', 'lbl_q2': '1. RECOMENDACIÓN (NPS)'
         }
 
-        # Asegurar conversión explícita a Datetime antes de extraer partes de la fecha (¡Solución al Error!)
+        # Asegurar conversión explícita a Datetime antes de extraer partes de la fecha
         df_m["Fecha de ultimo contacto"] = pd.to_datetime(df_m["Fecha de ultimo contacto"], errors='coerce')
         df_i["Fecha de ultimo contacto"] = pd.to_datetime(df_i["Fecha de ultimo contacto"], errors='coerce')
 
@@ -283,7 +283,7 @@ try:
                 
                 st.markdown(f"**Segmentación actual Marca:** `{st.session_state.filtro_val_m}`")
                 
-                # REESTRUCTURACIÓN DE SUBPESTAÑAS MARCA (¡Actualizado según captura!)
+                # SUBPESTAÑAS MARCA
                 stabs_m = st.tabs(["🤝 Gestión Comercial", "🚗 Test Drive", "💰 Finanzas", "📦 Procesos y Entrega", "📞 Contacto Posterior"])
                 
                 with stabs_m[0]:
@@ -320,7 +320,9 @@ try:
                 p_i_q1 = (serie_csi >= 9.0).sum()
                 n_i_q1 = ((serie_csi >= 7.0) & (serie_csi < 9.0)).sum()
                 d_i_q1 = (serie_csi < 7.0).sum()
-                nps_i_q2, p_i_q2, n_i_q2, d_i_q2, _ = calcular_nPS_detallado(df_i_base[MAPA_I['q2']])
+                
+                # ¡CORREGIDO AQUÍ! (nps en minúsculas para evitar el error de Atributo)
+                nps_i_q2, p_i_q2, n_i_q2, d_i_q2, _ = calcular_nps_detallado(df_i_base[MAPA_I['q2']])
 
                 ci_q1, ci_q2, ci_tot = st.columns([2.2, 2.2, 0.8])
                 with ci_q1:
@@ -346,7 +348,7 @@ try:
                 
                 st.markdown(f"**Segmentación actual Interna:** `{st.session_state.filtro_val_i}`")
                 
-                # REESTRUCTURACIÓN DE SUBPESTAÑAS INTERNAS (¡Actualizado según captura!)
+                # SUBPESTAÑAS INTERNAS
                 stabs_i = st.tabs(["🤝 Gestión Comercial", "🚗 Test Drive", "📦 Procesos y Entrega", "📞 Contacto posterior"])
                 
                 with stabs_i[0]:
