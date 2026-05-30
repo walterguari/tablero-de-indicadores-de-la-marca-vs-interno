@@ -75,13 +75,13 @@ def get_bar_color(val):
     if val >= 90: return '#FBC02D'
     return '#D32F2F'
 
-# --- SUGERENCIA 2: OPTIMIZACIÓN DE HEIGHT (A 165) EN GRÁFICOS PARA EVITAR SCROLLS ---
+# --- CORREGIDO: SE ELIMINÓ EL PARÁMETRO 'bold' INVÁLIDO EN PLOTLY ---
 def crear_gauge_moderno(valor, titulo, objetivo=94.0):
     color_viva = get_bar_color(valor)
     fig = go.Figure(go.Indicator(
         mode = "gauge+number",
         value = valor,
-        title = {'text': f"{titulo}", 'font': {'size': 12, 'color': '#555555', 'bold': True}},
+        title = {'text': f"<b>{titulo}</b>", 'font': {'size': 12, 'color': '#555555'}},
         number = {'suffix': "%", 'font': {'size': 23, 'color': '#1E1E1E', 'family': 'Arial'}, 'valueformat': '.1f'},
         gauge = {
             'axis': {'range': [-100, 100], 'visible': False}, 
@@ -171,7 +171,7 @@ try:
     
     if not df_m.empty and not df_i.empty:
         
-        # MAPEO DE COLUMNAS (Incluye Q13)
+        # MAPEO DE COLUMNAS
         MAPA_M = {
             'q1': 'Q1 - Satisfacción general', 'q2': 'Q2 - Recomendación - Concesionario', 'q3': 'Q3 - Verbalización',
             'q4': 'Q4 - Cortesía y amabilidad', 'q5': 'Q5 - Competencia Vendedor', 'q6': 'Q6 - Ofrecimiento Test Drive',
@@ -195,7 +195,7 @@ try:
         df_m["Fecha de ultimo contacto"] = pd.to_datetime(df_m["Fecha de ultimo contacto"], errors='coerce')
         df_i["Fecha de ultimo contacto"] = pd.to_datetime(df_i["Fecha de ultimo contacto"], errors='coerce')
 
-        # Categorizaciones estructurales para clics basadas en NPS (9 y 10 Promotores)
+        # Categorizaciones estructurales para clics basadas en NPS
         def generar_categorias(val):
             v = pd.to_numeric(val, errors='coerce')
             if pd.isna(v): return "Sin Datos"
@@ -263,7 +263,7 @@ try:
                 val_m_q1, p_m_q1, n_m_q1, d_m_q1, t_m_q1 = calcular_nps_detallado(df_m_base[MAPA_M['q1']])
                 nps_m_q2, p_m_q2, n_m_q2, d_m_q2, _ = calcular_nps_detallado(df_m_base[MAPA_M['q2']])
 
-                # --- SUGERENCIA 1: SECCIÓN ENVOLVENTE KPI EN CARD LIMPIA ---
+                # Cards Envolventes KPI (Sugerencia 1)
                 with st.container(border=True):
                     cm_q1, cm_q2, cm_tot = st.columns([2.2, 2.2, 0.8])
                     with cm_q1:
@@ -321,7 +321,7 @@ try:
                 df_m_v["Fecha de ultimo contacto"] = df_m_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
                 df_m_v = df_m_v.rename(columns={MAPA_M['q3']: 'Comentario Textual'})
                 
-                # --- SUGERENCIA 3: BUSCADOR DINÁMICO POR PALABRA CLAVE ---
+                # Buscador Dinámico por Palabra Clave (Sugerencia 3)
                 busqueda_m = st.text_input("🔍 Buscar en comentarios de Marca:", "", key="search_m").strip()
                 if busqueda_m:
                     df_m_v = df_m_v[df_m_v['Comentario Textual'].str.contains(busqueda_m, case=False, na=False)]
@@ -337,7 +337,7 @@ try:
                 d_i_q1 = (serie_csi < 7.0).sum()
                 nps_i_q2, p_i_q2, n_i_q2, d_i_q2, _ = calcular_nps_detallado(df_i_base[MAPA_I['q2']])
 
-                # --- SUGERENCIA 1: SECCIÓN ENVOLVENTE KPI EN CARD LIMPIA ---
+                # Cards Envolventes KPI (Sugerencia 1)
                 with st.container(border=True):
                     ci_q1, ci_q2, ci_tot = st.columns([2.2, 2.2, 0.8])
                     with ci_q1:
@@ -384,7 +384,7 @@ try:
                 df_i_v["Fecha de ultimo contacto"] = df_i_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
                 df_i_v = df_i_v.rename(columns={MAPA_I['q3']: 'Comentario Textual'})
                 
-                # --- SUGERENCIA 3: BUSCADOR DINÁMICO POR PALABRA CLAVE ---
+                # Buscador Dinámico por Palabra Clave (Sugerencia 3)
                 busqueda_i = st.text_input("🔍 Buscar en comentarios Internos:", "", key="search_i").strip()
                 if busqueda_i:
                     df_i_v = df_i_v[df_i_v['Comentario Textual'].str.contains(busqueda_i, case=False, na=False)]
@@ -435,7 +435,7 @@ try:
                 
                 df_master = pd.DataFrame(resumen_master).sort_values("Muestra M", ascending=False)
                 
-                # --- SUGERENCIA 4: REESTRUCTURACIÓN DE ESTILOS LIMPIOS Y TEXTO DE ALERTAS MATE ---
+                # Alertas Mates y Fondos Limpios (Sugerencia 4)
                 def color_celda_nps_master(val):
                     try:
                         v = float(val)
@@ -450,7 +450,6 @@ try:
                     if "✅" in val_str:
                         return 'background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;'
                     elif "🚨" in val_str:
-                        # Texto destacado en rojo oscuro sin pintar el fondo completo
                         return 'color: #C62828; font-weight: bold; text-align: center;'
                     return 'text-align: center; color: #555;'
 
