@@ -168,11 +168,12 @@ try:
     
     if not df_m.empty and not df_i.empty:
         
-        # MAPEO DE COLUMNAS
+        # MAPEO DE COLUMNAS (Incluye Q13)
         MAPA_M = {
             'q1': 'Q1 - Satisfacción general', 'q2': 'Q2 - Recomendación - Concesionario', 'q3': 'Q3 - Verbalización',
             'q4': 'Q4 - Cortesía y amabilidad', 'q5': 'Q5 - Competencia Vendedor', 'q6': 'Q6 - Ofrecimiento Test Drive',
             'q8': 'Q8 - Satisfacción información entre compra y entrega', 'q11': 'Q11 - Satisfacción Momento de la entrega',
+            'q13': 'Q13 - Satisfacción Entrega General',
             'q14': 'Q14 - Contactado', 'q15': 'Q15 - Satisfacción con el Contacto',
             'lbl_q1': 'Q1 - SATISFACCIÓN (NPS)', 'lbl_q2': 'Q2 - RECOMENDACIÓN (NPS)'
         }
@@ -187,11 +188,11 @@ try:
             'lbl_q1': 'CSI GENERAL (PROMEDIO %)', 'lbl_q2': '1. RECOMENDACIÓN (NPS)'
         }
 
-        # Asegurar conversión explícita a Datetime antes de extraer partes de la fecha
+        # Asegurar conversión explícita a Datetime
         df_m["Fecha de ultimo contacto"] = pd.to_datetime(df_m["Fecha de ultimo contacto"], errors='coerce')
         df_i["Fecha de ultimo contacto"] = pd.to_datetime(df_i["Fecha de ultimo contacto"], errors='coerce')
 
-        # Categorizaciones estructurales para clicks
+        # Categorizaciones estructurales para clics
         def generar_categorias(val):
             v = pd.to_numeric(val, errors='coerce')
             if pd.isna(v): return "Sin Datos"
@@ -283,7 +284,6 @@ try:
                 
                 st.markdown(f"**Segmentación actual Marca:** `{st.session_state.filtro_val_m}`")
                 
-                # SUBPESTAÑAS MARCA
                 stabs_m = st.tabs(["🤝 Gestión Comercial", "🚗 Test Drive", "💰 Finanzas", "📦 Procesos y Entrega", "📞 Contacto Posterior"])
                 
                 with stabs_m[0]:
@@ -298,10 +298,22 @@ try:
                     cf1, cf2 = st.columns(2)
                     cf1.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_m_sub['Q10 - Satisfacción Financiación utilizada'])[0], "Q10 - Sat. Financiación"), use_container_width=True, key="g_m_q10")
                     cf2.plotly_chart(crear_grafico_torta(df_m_sub, 'Q9 - Financiación utilizada', 'Mix Ventas Financiadas'), use_container_width=True, key="p_m_q9")
+                
+                # REESTRUCTURACIÓN DE LA PESTAÑA PROCESOS Y ENTREGA CON Q13 DESTACADO
                 with stabs_m[3]:
+                    # Fila Superior: Indicador Macro (Q13) Centrado de forma jerárquica
+                    _, col_macro, _ = st.columns([0.5, 3.0, 0.5])
+                    with col_macro:
+                        q13_val, _ = calcular_csi_directo_porcentaje(df_m_sub[MAPA_M['q13']])
+                        st.plotly_chart(crear_gauge_moderno(q13_val, "⭐ Q13 - Satisfacción Entrega General (Macro)"), use_container_width=True, key="g_m_q13")
+                    
+                    st.markdown("<hr style='margin:5px 0px; border-color:#eee;'>", unsafe_allow_html=True)
+                    
+                    # Fila Inferior: Indicadores de Soporte Operativo
                     ce1, ce2 = st.columns(2)
                     ce1.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_m_sub[MAPA_M['q8']])[0], "Q8 - Info Pre-entrega"), use_container_width=True, key="g_m_q8")
                     ce2.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_m_sub[MAPA_M['q11']])[0], "Q11 - Momento de la entrega"), use_container_width=True, key="g_m_q11")
+                
                 with stabs_m[4]:
                     cp1, cp2 = st.columns(2)
                     cp1.plotly_chart(crear_grafico_torta(df_m_sub, MAPA_M['q14'], 'Q14 - Contactado Posterior'), use_container_width=True, key="p_m_q14")
@@ -320,8 +332,6 @@ try:
                 p_i_q1 = (serie_csi >= 9.0).sum()
                 n_i_q1 = ((serie_csi >= 7.0) & (serie_csi < 9.0)).sum()
                 d_i_q1 = (serie_csi < 7.0).sum()
-                
-                # ¡CORREGIDO AQUÍ! (nps en minúsculas para evitar el error de Atributo)
                 nps_i_q2, p_i_q2, n_i_q2, d_i_q2, _ = calcular_nps_detallado(df_i_base[MAPA_I['q2']])
 
                 ci_q1, ci_q2, ci_tot = st.columns([2.2, 2.2, 0.8])
@@ -348,7 +358,6 @@ try:
                 
                 st.markdown(f"**Segmentación actual Interna:** `{st.session_state.filtro_val_i}`")
                 
-                # SUBPESTAÑAS INTERNAS
                 stabs_i = st.tabs(["🤝 Gestión Comercial", "🚗 Test Drive", "📦 Procesos y Entrega", "📞 Contacto posterior"])
                 
                 with stabs_i[0]:
