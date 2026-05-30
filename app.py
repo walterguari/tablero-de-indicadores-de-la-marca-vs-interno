@@ -71,25 +71,26 @@ def calcular_faltante_94(promotores, detractores, total):
     return f"🚨 Faltan {math.ceil(x)}"
 
 def get_bar_color(val):
-    if val >= 94: return '#28a745'
-    if val >= 90: return '#ffc107'
-    return '#dc3545'
+    if val >= 94: return '#2E7D32'
+    if val >= 90: return '#FBC02D'
+    return '#D32F2F'
 
-def crear_gauge_moderno(valor, titulo):
+# --- SUGERENCIA 2: OPTIMIZACIÓN DE HEIGHT (A 165) EN GRÁFICOS PARA EVITAR SCROLLS ---
+def crear_gauge_moderno(valor, titulo, objetivo=94.0):
     color_viva = get_bar_color(valor)
     fig = go.Figure(go.Indicator(
         mode = "gauge+number",
         value = valor,
-        title = {'text': f"<b>{titulo}</b>", 'font': {'size': 12, 'color': '#333'}},
-        number = {'suffix': "%", 'font': {'size': 26}, 'valueformat': '.1f'},
+        title = {'text': f"{titulo}", 'font': {'size': 12, 'color': '#555555', 'bold': True}},
+        number = {'suffix': "%", 'font': {'size': 23, 'color': '#1E1E1E', 'family': 'Arial'}, 'valueformat': '.1f'},
         gauge = {
-            'axis': {'range': [-100, 100], 'visible': False}, # Rango de -100 a 100 válido para lógicas NPS
+            'axis': {'range': [-100, 100], 'visible': False}, 
             'bar': {'color': color_viva, 'thickness': 0.15},
-            'bgcolor': "#f0f0f0",
-            'threshold': {'line': {'color': "black", 'width': 3}, 'thickness': 0.8, 'value': 94}
+            'bgcolor': "#F5F5F5",
+            'threshold': {'line': {'color': "black", 'width': 3}, 'thickness': 0.75, 'value': objetivo}
         }
     ))
-    fig.update_layout(height=190, margin=dict(l=20, r=20, t=35, b=0), paper_bgcolor='rgba(0,0,0,0)')
+    fig.update_layout(height=165, margin=dict(l=15, r=15, t=35, b=5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
     return fig
 
 def crear_grafico_torta(df, columna_o_keyword, titulo):
@@ -129,7 +130,7 @@ def crear_grafico_torta(df, columna_o_keyword, titulo):
         pct_si = (cant_si / total_respuestas) * 100 if total_respuestas > 0 else 0.0
         label_centro = str(conteo.iloc[0]['Respuesta']).title()
     
-    colores_map = {'SI': '#28a745', 'NO': '#dc3545'}
+    colores_map = {'SI': '#2E7D32', 'NO': '#D32F2F'}
     
     fig = px.pie(
         conteo, 
@@ -141,16 +142,18 @@ def crear_grafico_torta(df, columna_o_keyword, titulo):
         color_discrete_map=colores_map if 'SI' in conteo['Respuesta'].values else None,
         color_discrete_sequence=px.colors.qualitative.Pastel if 'SI' not in conteo['Respuesta'].values else None
     )
-    fig.update_traces(textinfo='percent+label', textposition='outside')
+    fig.update_traces(textinfo='percent+label', textposition='outside', textfont=dict(size=9))
     
     fig.update_layout(
-        height=200, 
-        margin=dict(l=10, r=10, t=40, b=10), 
+        height=165, 
+        margin=dict(l=10, r=10, t=35, b=5), 
         showlegend=False,
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
         annotations=[dict(
-            text=f"<b>{pct_si:.1f}%</b><br><span style='font-size:10px;color:#666;font-weight:normal;'>{label_centro}</span>", 
+            text=f"<b>{pct_si:.1f}%</b><br><span style='font-size:9px;color:#666;font-weight:normal;'>{label_centro}</span>", 
             showarrow=False, 
-            font=dict(size=18, color='#28a745' if label_centro == "Sí" else '#007bff')
+            font=dict(size=16, color='#2E7D32' if label_centro == "Sí" else '#007bff')
         )]
     )
     return fig
@@ -260,23 +263,25 @@ try:
                 val_m_q1, p_m_q1, n_m_q1, d_m_q1, t_m_q1 = calcular_nps_detallado(df_m_base[MAPA_M['q1']])
                 nps_m_q2, p_m_q2, n_m_q2, d_m_q2, _ = calcular_nps_detallado(df_m_base[MAPA_M['q2']])
 
-                cm_q1, cm_q2, cm_tot = st.columns([2.2, 2.2, 0.8])
-                with cm_q1:
-                    st.plotly_chart(crear_gauge_moderno(val_m_q1, MAPA_M['lbl_q1']), use_container_width=True, key="gauge_m_q1")
-                    col_m1, col_m2, col_m3 = st.columns(3)
-                    if col_m1.button(f"🟢 {p_m_q1} Prom", key="bm_q1_p"): st.session_state.filtro_col_m = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_m = "Promotor"; st.rerun()
-                    if col_m2.button(f"🟡 {n_m_q1} Neu", key="bm_q1_n"): st.session_state.filtro_col_m = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_m = "Neutro"; st.rerun()
-                    if col_m3.button(f"🔴 {d_m_q1} Det", key="bm_q1_d"): st.session_state.filtro_col_m = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_m = "Detractor"; st.rerun()
-                with cm_q2:
-                    st.plotly_chart(crear_gauge_moderno(nps_m_q2, MAPA_M['lbl_q2']), use_container_width=True, key="gauge_m_q2")
-                    col_m4, col_m5, col_m6 = st.columns(3)
-                    if col_m4.button(f"🟢 {p_m_q2} Prom", key="bm_q2_p"): st.session_state.filtro_col_m = "Cat_Filtro_Q2"; st.session_state.filtro_val_m = "Promotor"; st.rerun()
-                    if col_m5.button(f"🟡 {n_m_q2} Neu", key="bm_q2_n"): st.session_state.filtro_col_m = "Cat_Filtro_Q2"; st.session_state.filtro_val_m = "Neutro"; st.rerun()
-                    if col_m6.button(f"🔴 {d_m_q2} Det", key="bm_q2_d"): st.session_state.filtro_col_m = "Cat_Filtro_Q2"; st.session_state.filtro_val_m = "Detractor"; st.rerun()
-                with cm_tot:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    st.metric("Muestra", t_m_q1)
-                    if st.button("🔄 Ver Todos", key="btn_clear_m"): st.session_state.filtro_val_m = "Todos"; st.rerun()
+                # --- SUGERENCIA 1: SECCIÓN ENVOLVENTE KPI EN CARD LIMPIA ---
+                with st.container(border=True):
+                    cm_q1, cm_q2, cm_tot = st.columns([2.2, 2.2, 0.8])
+                    with cm_q1:
+                        st.plotly_chart(crear_gauge_moderno(val_m_q1, MAPA_M['lbl_q1']), use_container_width=True, key="gauge_m_q1")
+                        col_m1, col_m2, col_m3 = st.columns(3)
+                        if col_m1.button(f"🟢 {p_m_q1} Prom", key="bm_q1_p"): st.session_state.filtro_col_m = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_m = "Promotor"; st.rerun()
+                        if col_m2.button(f"🟡 {n_m_q1} Neu", key="bm_q1_n"): st.session_state.filtro_col_m = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_m = "Neutro"; st.rerun()
+                        if col_m3.button(f"🔴 {d_m_q1} Det", key="bm_q1_d"): st.session_state.filtro_col_m = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_m = "Detractor"; st.rerun()
+                    with cm_q2:
+                        st.plotly_chart(crear_gauge_moderno(nps_m_q2, MAPA_M['lbl_q2']), use_container_width=True, key="gauge_m_q2")
+                        col_m4, col_m5, col_m6 = st.columns(3)
+                        if col_m4.button(f"🟢 {p_m_q2} Prom", key="bm_q2_p"): st.session_state.filtro_col_m = "Cat_Filtro_Q2"; st.session_state.filtro_val_m = "Promotor"; st.rerun()
+                        if col_m5.button(f"🟡 {n_m_q2} Neu", key="bm_q2_n"): st.session_state.filtro_col_m = "Cat_Filtro_Q2"; st.session_state.filtro_val_m = "Neutro"; st.rerun()
+                        if col_m6.button(f"🔴 {d_m_q2} Det", key="bm_q2_d"): st.session_state.filtro_col_m = "Cat_Filtro_Q2"; st.session_state.filtro_val_m = "Detractor"; st.rerun()
+                    with cm_tot:
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.metric("Muestra", t_m_q1)
+                        if st.button("🔄 Todos", key="btn_clear_m"): st.session_state.filtro_val_m = "Todos"; st.rerun()
 
                 df_m_sub = df_m_base.copy()
                 if st.session_state.filtro_val_m != "Todos":
@@ -314,7 +319,13 @@ try:
                 st.markdown("##### 💬 Verbalizaciones del Cliente (Marca)")
                 df_m_v = df_m_sub[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_M['q3'], "Vendedor"]].copy().sort_values("Fecha de ultimo contacto", ascending=False)
                 df_m_v["Fecha de ultimo contacto"] = df_m_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
-                st.dataframe(df_m_v.rename(columns={MAPA_M['q3']: 'Comentario Textual'}), use_container_width=True, hide_index=True, height=220)
+                df_m_v = df_m_v.rename(columns={MAPA_M['q3']: 'Comentario Textual'})
+                
+                # --- SUGERENCIA 3: BUSCADOR DINÁMICO POR PALABRA CLAVE ---
+                busqueda_m = st.text_input("🔍 Buscar en comentarios de Marca:", "", key="search_m").strip()
+                if busqueda_m:
+                    df_m_v = df_m_v[df_m_v['Comentario Textual'].str.contains(busqueda_m, case=False, na=False)]
+                st.dataframe(df_m_v, use_container_width=True, hide_index=True, height=180)
 
             # --- PANEL INTERNO (DERECHA) ---
             with sc_interna:
@@ -326,23 +337,25 @@ try:
                 d_i_q1 = (serie_csi < 7.0).sum()
                 nps_i_q2, p_i_q2, n_i_q2, d_i_q2, _ = calcular_nps_detallado(df_i_base[MAPA_I['q2']])
 
-                ci_q1, ci_q2, ci_tot = st.columns([2.2, 2.2, 0.8])
-                with ci_q1:
-                    st.plotly_chart(crear_gauge_moderno(val_i_q1, MAPA_I['lbl_q1']), use_container_width=True, key="gauge_i_q1")
-                    col_i1, col_i2, col_i3 = st.columns(3)
-                    if col_i1.button(f"🟢 {p_i_q1} Prom", key="bi_q1_p"): st.session_state.filtro_col_i = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_i = "Promotor"; st.rerun()
-                    if col_i2.button(f"🟡 {n_i_q1} Neu", key="bi_q1_n"): st.session_state.filtro_col_i = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_i = "Neutro"; st.rerun()
-                    if col_i3.button(f"🔴 {d_i_q1} Det", key="bi_q1_d"): st.session_state.filtro_col_i = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_i = "Detractor"; st.rerun()
-                with ci_q2:
-                    st.plotly_chart(crear_gauge_moderno(nps_i_q2, MAPA_I['lbl_q2']), use_container_width=True, key="gauge_i_q2")
-                    col_i4, col_i5, col_i6 = st.columns(3)
-                    if col_i4.button(f"🟢 {p_i_q2} Prom", key="bi_q2_p"): st.session_state.filtro_col_i = "Cat_Filtro_Q2"; st.session_state.filtro_val_i = "Promotor"; st.rerun()
-                    if col_i5.button(f"🟡 {n_i_q2} Neu", key="bi_q2_n"): st.session_state.filtro_col_i = "Cat_Filtro_Q2"; st.session_state.filtro_val_i = "Neutro"; st.rerun()
-                    if col_i6.button(f"🔴 {d_i_q2} Det", key="bi_q2_d"): st.session_state.filtro_col_i = "Cat_Filtro_Q2"; st.session_state.filtro_val_i = "Detractor"; st.rerun()
-                with ci_tot:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    st.metric("Muestra", t_i_q1)
-                    if st.button("🔄 Ver Todos", key="btn_clear_i"): st.session_state.filtro_val_i = "Todos"; st.rerun()
+                # --- SUGERENCIA 1: SECCIÓN ENVOLVENTE KPI EN CARD LIMPIA ---
+                with st.container(border=True):
+                    ci_q1, ci_q2, ci_tot = st.columns([2.2, 2.2, 0.8])
+                    with ci_q1:
+                        st.plotly_chart(crear_gauge_moderno(val_i_q1, MAPA_I['lbl_q1']), use_container_width=True, key="gauge_i_q1")
+                        col_i1, col_i2, col_i3 = st.columns(3)
+                        if col_i1.button(f"🟢 {p_i_q1} Prom", key="bi_q1_p"): st.session_state.filtro_col_i = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_i = "Promotor"; st.rerun()
+                        if col_i2.button(f"🟡 {n_i_q1} Neu", key="bi_q1_n"): st.session_state.filtro_col_i = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_i = "Neutro"; st.rerun()
+                        if col_i3.button(f"🔴 {d_i_q1} Det", key="bi_q1_d"): st.session_state.filtro_col_i = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_i = "Detractor"; st.rerun()
+                    with ci_q2:
+                        st.plotly_chart(crear_gauge_moderno(nps_i_q2, MAPA_I['lbl_q2']), use_container_width=True, key="gauge_i_q2")
+                        col_i4, col_i5, col_i6 = st.columns(3)
+                        if col_i4.button(f"🟢 {p_i_q2} Prom", key="bi_q2_p"): st.session_state.filtro_col_i = "Cat_Filtro_Q2"; st.session_state.filtro_val_i = "Promotor"; st.rerun()
+                        if col_i5.button(f"🟡 {n_i_q2} Neu", key="bi_q2_n"): st.session_state.filtro_col_i = "Cat_Filtro_Q2"; st.session_state.filtro_val_i = "Neutro"; st.rerun()
+                        if col_i6.button(f"🔴 {d_i_q2} Det", key="bi_q2_d"): st.session_state.filtro_col_i = "Cat_Filtro_Q2"; st.session_state.filtro_val_i = "Detractor"; st.rerun()
+                    with ci_tot:
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.metric("Muestra", t_i_q1)
+                        if st.button("🔄 Todos", key="btn_clear_i"): st.session_state.filtro_val_i = "Todos"; st.rerun()
 
                 df_i_sub = df_i_base.copy()
                 if st.session_state.filtro_val_i != "Todos":
@@ -369,10 +382,16 @@ try:
                 st.markdown("##### 💬 Verbalizaciones del Cliente (Internas)")
                 df_i_v = df_i_sub[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_I['q3'], "Vendedor"]].copy().sort_values("Fecha de ultimo contacto", ascending=False)
                 df_i_v["Fecha de ultimo contacto"] = df_i_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
-                st.dataframe(df_i_v.rename(columns={MAPA_I['q3']: 'Comentario Textual'}), use_container_width=True, hide_index=True, height=220)
+                df_i_v = df_i_v.rename(columns={MAPA_I['q3']: 'Comentario Textual'})
+                
+                # --- SUGERENCIA 3: BUSCADOR DINÁMICO POR PALABRA CLAVE ---
+                busqueda_i = st.text_input("🔍 Buscar en comentarios Internos:", "", key="search_i").strip()
+                if busqueda_i:
+                    df_i_v = df_i_v[df_i_v['Comentario Textual'].str.contains(busqueda_i, case=False, na=False)]
+                st.dataframe(df_i_v, use_container_width=True, hide_index=True, height=180)
 
         # ==========================================================
-        # TAB 2: TABLA UNIFICADA DE ASESORES (FORMATO DECIMAL LIMPIO CORREGIDO)
+        # TAB 2: TABLA UNIFICADA DE ASESORES
         # ==========================================================
         with tab_unificada:
             st.header("Ranking de Performance Comercial Integrado")
@@ -386,7 +405,6 @@ try:
                     data_m = df_m_base[df_m_base["Vendedor"] == vend]
                     data_i = df_i_base[df_i_base["Vendedor"] == vend]
                     
-                    # Cálculos con lógica NPS en Marca
                     if not data_m.empty:
                         nm_q2, pm_q2, _, dm_q2, tm_q2 = calcular_nps_detallado(data_m[MAPA_M['q2']])
                         cortesia_m = calcular_nps_detallado(data_m[MAPA_M['q4']])[0]
@@ -395,7 +413,6 @@ try:
                     else:
                         nm_q2, cortesia_m, competencia_m, target_m, tm_q2 = 0.0, 0.0, 0.0, "Sin registros", 0
                         
-                    # Cálculos con lógica NPS en Interna
                     if not data_i.empty:
                         ni_q2, pi_q2, _, di_q2, ti_q2 = calcular_nps_detallado(data_i[MAPA_I['q2']])
                         cortesia_i = calcular_nps_detallado(data_i[MAPA_I['q4']])[0]
@@ -418,20 +435,28 @@ try:
                 
                 df_master = pd.DataFrame(resumen_master).sort_values("Muestra M", ascending=False)
                 
-                # Reglas de formato condicional (Aptas para rangos NPS de -100 a 100)
+                # --- SUGERENCIA 4: REESTRUCTURACIÓN DE ESTILOS LIMPIOS Y TEXTO DE ALERTAS MATE ---
                 def color_celda_nps_master(val):
                     try:
                         v = float(val)
-                        if v >= 94: return 'background-color: #d4edda; color: #155724; font-weight: bold; text-align: center;'
-                        if v >= 90: return 'background-color: #fff3cd; color: #856404; font-weight: bold; text-align: center;'
-                        return 'background-color: #f8d7da; color: #721c24; font-weight: bold; text-align: center;'
+                        if v >= 94: return 'background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;'
+                        if v >= 90: return 'background-color: #FFF3CD; color: #856404; font-weight: bold; text-align: center;'
+                        return 'background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;'
                     except:
                         return 'text-align: center; color: #999;'
 
-                # Se añade .format(precision=1) al final para recortar los decimales flotantes molestos de Pandas a un formato limpio de tipo 90.5 o 100.0
+                def estilar_celda_alerta(val):
+                    val_str = str(val)
+                    if "✅" in val_str:
+                        return 'background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;'
+                    elif "🚨" in val_str:
+                        # Texto destacado en rojo oscuro sin pintar el fondo completo
+                        return 'color: #C62828; font-weight: bold; text-align: center;'
+                    return 'text-align: center; color: #555;'
+
                 df_styled = df_master.style.map(color_celda_nps_master, subset=["NPS Rec. (MARCA)", "Cortesía M (NPS)", "Competencia M (NPS)", "NPS Rec. (INTERNA)", "Cortesía I (NPS)"])\
-                                           .map(lambda x: 'color: #721c24; font-weight: bold; text-align: center;' if '🚨' in str(x) else 'color: #155724; text-align: center;', subset=['Faltante Obj. M (94%)', 'Faltante Obj. I (94%)'])\
-                                           .format(precision=1, na_rep="Sin Datos") # 👈 ¡Formato unificado aplicado con éxito!
+                                           .map(estilar_celda_alerta, subset=['Faltante Obj. M (94%)', 'Faltante Obj. I (94%)'])\
+                                           .format(precision=1, na_rep="Sin Datos")
                                            
                 st.dataframe(df_styled, use_container_width=True, hide_index=True)
 
@@ -468,7 +493,7 @@ try:
                         if not df_ev_m.empty:
                             fig_m = px.line(df_ev_m, x="Periodo_Str", y="NPS", text=df_ev_m["NPS"].round(1).astype(str) + "%", labels={"Periodo_Str": "Mes", "NPS": "NPS Marca %"}, markers=True)
                             fig_m.add_hline(y=94, line_dash="dash", line_color="green", annotation_text="Objetivo (94%)")
-                            fig_m.update_traces(textposition="top center", line=dict(color='#28a745', width=3))
+                            fig_m.update_traces(textposition="top center", line=dict(color='#2E7D32', width=3))
                             fig_m.update_layout(yaxis=dict(range=[-100, 110]), height=240, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                             st.plotly_chart(fig_m, use_container_width=True, key="linea_ev_marca")
                     else:
