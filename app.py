@@ -58,7 +58,9 @@ def calcular_csi_directo_porcentaje(serie):
     serie_limpia = limpiar_comas_a_numerico(serie).dropna()
     total = len(serie_limpia)
     if total == 0: return 0.0, 0
-    promedio_porcentaje = (serie_limpia.mean()) * 10
+    average_val = serie_limpia.mean()
+    # Si la escala ya viene de 0 a 100, no multiplicamos por 10
+    promedio_porcentaje = average_val * 10 if average_val <= 10 else average_val
     return promedio_porcentaje, total
 
 def calcular_faltante_94(promotores, detractores, total):
@@ -167,7 +169,7 @@ try:
     
     if not df_m.empty and not df_i.empty:
         
-        # MAPEO DE COLUMNAS (Mantenemos los dos intactos)
+        # MAPEO DE COLUMNAS
         MAPA_M = {
             'q1': 'Q1 - Satisfacción general', 'q2': 'Q2 - Recomendación - Concesionario', 'q3': 'Q3 - Verbalización',
             'q4': 'Q4 - Cortesía y amabilidad', 'q5': 'Q5 - Competencia Vendedor', 'q6': 'Q6 - Ofrecimiento Test Drive',
@@ -205,7 +207,7 @@ try:
         df_m['Anio'] = df_m["Fecha de ultimo contacto"].dt.year
         df_m['Mes_Num'] = df_m["Fecha de ultimo contacto"].dt.month
         df_i['Anio'] = df_i["Fecha de ultimo contacto"].dt.year
-        df_i['Mes_Num'] = df_i["Fecha de ultimo contacto"].dt.month
+        df_i['Mes_Num'] = df_i["Fecha de último contacto"].dt.month
         
         # Universo de años y meses cruzados
         anios_combinados = sorted(list(set(df_m['Anio'].dropna().unique().astype(int)) | set(df_i['Anio'].dropna().unique().astype(int))), reverse=True)
@@ -283,7 +285,8 @@ try:
                     df_m_sub = df_m_sub[df_m_sub[st.session_state.filtro_col_m] == st.session_state.filtro_val_m]
                 
                 st.markdown(f"**Segmentación actual Marca:** `{st.session_state.filtro_val_m}`")
-                stabs_m = st.tabs(["🤝 Ventas", "🚗 Test Drive", "💰 Finanzas", "📦 Entrega"])
+                stabs_m = st.tabs(["🤝 Gestión Comercial", "🚗 Test Drive", "💰 Finanzas", "📦 Procesos y Entrega", "📞 Contacto Posterior"])
+                
                 with stabs_m[0]:
                     v1, v2 = st.columns(2)
                     v1.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_m_sub[MAPA_M['q4']])[0], "Q4 - Cortesía y Amabilidad"), use_container_width=True, key="g_m_q4")
@@ -300,7 +303,10 @@ try:
                     ce1, ce2 = st.columns(2)
                     ce1.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_m_sub[MAPA_M['q8']])[0], "Q8 - Info Pre-entrega"), use_container_width=True, key="g_m_q8")
                     ce2.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_m_sub[MAPA_M['q11']])[0], "Q11 - Momento de la entrega"), use_container_width=True, key="g_m_q11")
-                    st.plotly_chart(crear_grafico_torta(df_m_sub, MAPA_M['q14'], 'Q14 - Contactado Posterior'), use_container_width=True, key="p_m_q14")
+                with stabs_m[4]:
+                    cp1, cp2 = st.columns(2)
+                    cp1.plotly_chart(crear_grafico_torta(df_m_sub, MAPA_M['q14'], 'Q14 - Contactado Posterior'), use_container_width=True, key="p_m_q14")
+                    cp2.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_m_sub[MAPA_M['q15']])[0], "Q15 - Sat. con el Contacto"), use_container_width=True, key="g_m_q15")
 
                 st.markdown("##### 💬 Verbalizaciones del Cliente (Marca)")
                 df_m_v = df_m_sub[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_M['q3'], "Vendedor"]].copy().sort_values("Fecha de ultimo contacto", ascending=False)
@@ -341,16 +347,19 @@ try:
                     df_i_sub = df_i_sub[df_i_sub[st.session_state.filtro_col_i] == st.session_state.filtro_val_i]
                 
                 st.markdown(f"**Segmentación actual Interna:** `{st.session_state.filtro_val_i}`")
-                stabs_i = st.tabs(["🤝 Gestión Comercial", "📦 Procesos y Entrega", "📞 Contacto posterior"])
+                stabs_i = st.tabs(["🤝 Gestión Comercial", "🚗 Test Drive", "📦 Procesos y Entrega", "📞 Contacto posterior"])
+                
                 with stabs_i[0]:
-                    vi1, vi2 = st.columns(2)
+                    vi1, _ = st.columns([2, 2])
                     vi1.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_i_sub[MAPA_I['q4']])[0], "Preg. 2 - Cortesía y Amabilidad"), use_container_width=True, key="g_i_p2")
-                    vi2.plotly_chart(crear_grafico_torta(df_i_sub, MAPA_I['q6'], 'Preg. 3 - Ofrecimiento de Test Drive'), use_container_width=True, key="p_i_p3")
                 with stabs_i[1]:
+                    v_test, _ = st.columns([2, 2])
+                    v_test.plotly_chart(crear_grafico_torta(df_i_sub, MAPA_I['q6'], 'Preg. 3 - Ofrecimiento de Test Drive'), use_container_width=True, key="p_i_p3")
+                with stabs_i[2]:
                     ei1, ei2 = st.columns(2)
                     ei1.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_i_sub[MAPA_I['q8']])[0], "Preg. 4 - Calidad de Info Pre-entrega"), use_container_width=True, key="g_i_p4")
                     ei2.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_i_sub[MAPA_I['q11']])[0], "Preg. 5 - Presentación del 0KM"), use_container_width=True, key="g_i_p5")
-                with stabs_i[2]:
+                with stabs_i[3]:
                     pi1, pi2 = st.columns(2)
                     pi1.plotly_chart(crear_grafico_torta(df_i_sub, MAPA_I['q14'], 'Preg. 6 - Recepción Contacto'), use_container_width=True, key="p_i_p6")
                     pi2.plotly_chart(crear_gauge_moderno(calcular_csi_directo_porcentaje(df_i_sub[MAPA_I['q15']])[0], "Preg. 7 - Sat. Contacto Posterior"), use_container_width=True, key="g_i_p7")
@@ -366,7 +375,6 @@ try:
         with tab_unificada:
             st.header("Ranking de Performance Comercial Integrado")
             
-            # Unificamos la lista completa de vendedores presentes en cualquiera de las dos bases
             vendedores_unificados = sorted(list(set(df_m_base["Vendedor"].dropna().unique()) | set(df_i_base["Vendedor"].dropna().unique())))
             
             if vendedores_unificados:
@@ -375,14 +383,12 @@ try:
                     data_m = df_m_base[df_m_base["Vendedor"] == vend]
                     data_i = df_i_base[df_i_base["Vendedor"] == vend]
                     
-                    # Cálculos de Marca si existen datos para el asesor
                     if not data_m.empty:
                         nm_q2, pm_q2, _, dm_q2, tm_q2 = calcular_nps_detallado(data_m[MAPA_M['q2']])
                         target_m = calcular_faltante_94(pm_q2, dm_q2, tm_q2)
                     else:
                         nm_q2, target_m, tm_q2 = 0.0, "Sin registros", 0
                         
-                    # Cálculos de Interna si existen datos para el asesor
                     if not data_i.empty:
                         ni_q2, pi_q2, _, di_q2, ti_q2 = calcular_nps_detallado(data_i[MAPA_I['q2']])
                         target_i = calcular_faltante_94(pi_q2, di_q2, ti_q2)
@@ -429,7 +435,6 @@ try:
                 
                 col_ficha_m, col_ficha_i = st.columns(2)
                 
-                # --- EVOLUCIÓN HISTÓRICA MARCA ---
                 with col_ficha_m:
                     st.markdown("#### 🏢 Histórico de Marca")
                     df_vend_m = df_m_base[df_m_base["Vendedor"] == vendedor_sel]
@@ -457,7 +462,6 @@ try:
                     else:
                         st.info("Sin registros en la base de Marca para este asesor.")
 
-                # --- EVOLUCIÓN HISTÓRICA INTERNA ---
                 with col_ficha_i:
                     st.markdown("#### 🎯 Histórico Interno")
                     df_vend_i = df_i_base[df_i_base["Vendedor"] == vendedor_sel]
