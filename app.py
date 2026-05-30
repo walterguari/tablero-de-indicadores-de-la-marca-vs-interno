@@ -168,7 +168,7 @@ try:
     
     if not df_m.empty and not df_i.empty:
         
-        # MAPEO DE COLUMNAS
+        # MAPEO DE COLUMNAS (Incluye Q13)
         MAPA_M = {
             'q1': 'Q1 - Satisfacción general', 'q2': 'Q2 - Recomendación - Concesionario', 'q3': 'Q3 - Verbalización',
             'q4': 'Q4 - Cortesía y amabilidad', 'q5': 'Q5 - Competencia Vendedor', 'q6': 'Q6 - Ofrecimiento Test Drive',
@@ -319,7 +319,6 @@ try:
             # --- PANEL INTERNO (DERECHA) ---
             with sc_interna:
                 st.markdown("### 🎯 Datos de Origen: Encuestas Internas")
-                # CSI General de encuesta interna queda como promedio de forma exclusiva
                 val_i_q1, t_i_q1 = calcular_csi_directo_porcentaje(df_i_base[MAPA_I['q1']])
                 serie_csi = limpiar_comas_a_numerico(df_i_base[MAPA_I['q1']]).dropna()
                 p_i_q1 = (serie_csi >= 9.0).sum()
@@ -373,7 +372,7 @@ try:
                 st.dataframe(df_i_v.rename(columns={MAPA_I['q3']: 'Comentario Textual'}), use_container_width=True, hide_index=True, height=220)
 
         # ==========================================================
-        # TAB 2: TABLA UNIFICADA DE ASESORES (MÉTRICAS AJUSTADAS A NPS)
+        # TAB 2: TABLA UNIFICADA DE ASESORES (FORMATO DECIMAL LIMPIO CORREGIDO)
         # ==========================================================
         with tab_unificada:
             st.header("Ranking de Performance Comercial Integrado")
@@ -407,13 +406,13 @@ try:
                     resumen_master.append({
                         "Asesor Comercial": vend,
                         "Muestra M": tm_q2,
-                        "NPS Rec. (MARCA)": round(nm_q2, 1) if tm_q2 > 0 else "Sin Datos",
-                        "Cortesía M (NPS)": round(cortesia_m, 1) if tm_q2 > 0 else "Sin Datos",
-                        "Competencia M (NPS)": round(competencia_m, 1) if tm_q2 > 0 else "Sin Datos",
+                        "NPS Rec. (MARCA)": nm_q2 if tm_q2 > 0 else None,
+                        "Cortesía M (NPS)": cortesia_m if tm_q2 > 0 else None,
+                        "Competencia M (NPS)": competencia_m if tm_q2 > 0 else None,
                         "Faltante Obj. M (94%)": target_m,
                         "Muestra I": ti_q2,
-                        "NPS Rec. (INTERNA)": round(ni_q2, 1) if ti_q2 > 0 else "Sin Datos",
-                        "Cortesía I (NPS)": round(cortesia_i, 1) if ti_q2 > 0 else "Sin Datos",
+                        "NPS Rec. (INTERNA)": ni_q2 if ti_q2 > 0 else None,
+                        "Cortesía I (NPS)": cortesia_i if ti_q2 > 0 else None,
                         "Faltante Obj. I (94%)": target_i
                     })
                 
@@ -429,8 +428,11 @@ try:
                     except:
                         return 'text-align: center; color: #999;'
 
+                # Se añade .format(precision=1) al final para recortar los decimales flotantes molestos de Pandas a un formato limpio de tipo 90.5 o 100.0
                 df_styled = df_master.style.map(color_celda_nps_master, subset=["NPS Rec. (MARCA)", "Cortesía M (NPS)", "Competencia M (NPS)", "NPS Rec. (INTERNA)", "Cortesía I (NPS)"])\
-                                           .map(lambda x: 'color: #721c24; font-weight: bold; text-align: center;' if '🚨' in str(x) else 'color: #155724; text-align: center;', subset=['Faltante Obj. M (94%)', 'Faltante Obj. I (94%)'])
+                                           .map(lambda x: 'color: #721c24; font-weight: bold; text-align: center;' if '🚨' in str(x) else 'color: #155724; text-align: center;', subset=['Faltante Obj. M (94%)', 'Faltante Obj. I (94%)'])\
+                                           .format(precision=1, na_rep="Sin Datos") # 👈 ¡Formato unificado aplicado con éxito!
+                                           
                 st.dataframe(df_styled, use_container_width=True, hide_index=True)
 
         # ==========================================================
