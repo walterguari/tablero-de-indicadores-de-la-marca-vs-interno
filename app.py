@@ -49,24 +49,30 @@ def load_data(url, tipo_base):
                 
         # --- NUEVA FUENTE: GESTIÓN DE QUEJAS (Filtro Estricto 2025+) ---
         elif tipo_base == "Gestión de Quejas":
-            # Usar estrictamente 'Fecha de Gestión' como la fecha de auditoría
-            df["Fecha_Filtro"] = pd.to_datetime(df["Fecha de Gestión"], dayfirst=True, errors='coerce')
+            # 1. Buscador flexible para columnas críticas de graficación
+            col_fecha = next((c for c in df.columns if 'fech' in c.lower()), "Fecha de Gestión")
+            col_categorizacion = next((c for c in df.columns if 'categorizac' in c.lower() or 'categorí' in c.lower()), "Categorizacion del Reclamo")
+            col_sector = next((c for c in df.columns if 'sector' in c.lower() or 'afect' in c.lower()), "Sector Afectado")
             
-            # Filtro restrictivo temporal: Solo 2025 en adelante
+            df["Fecha_Filtro"] = pd.to_datetime(df[col_fecha], dayfirst=True, errors='coerce')
+            
+            # Filtro temporal obligatorio: solo 2025 en adelante
             df = df[df["Fecha_Filtro"].dt.year >= 2025].copy()
             df["Anio"] = df["Fecha_Filtro"].dt.year
             df["Mes_Num"] = df["Fecha_Filtro"].dt.month
             
-            # Normalización estricta de textos solicitada
-            columnas_quejas = [
-                "Categorizacion del Reclamo", "Sector Afectado", "tipo de queja", 
-                "marca", "cliente", "vendedor", "canal de venta", "comentario", "Reporte tratado por"
-            ]
-            for col in columnas_quejas:
-                if col in df.columns:
-                    df[col] = df[col].astype(str).str.strip().str.upper()
-                else:
-                    df[col] = "SIN DATOS"
+            # Forzar nombres limpios en mayúsculas para los gráficos interactivos
+            df["Categorizacion del Reclamo"] = df[col_categorizacion].astype(str).str.strip().str.upper() if col_categorizacion in df.columns else "SIN CATEGORIZAR"
+            df["Sector Afectado"] = df[col_sector].astype(str).str.strip().str.upper() if col_sector in df.columns else "SIN SECTOR"
+            
+            # 2. Mapeo adaptativo e inteligente para las 8 columnas solicitadas de la tabla inferior
+            df["tipo de queja"] = df[next((c for c in df.columns if 'tipo' in c.lower()), df.columns[1])].astype(str).str.strip().str.upper()
+            df["marca"] = df[next((c for c in df.columns if 'marc' in c.lower()), df.columns[2])].astype(str).str.strip().str.upper()
+            df["cliente"] = df[next((c for c in df.columns if 'client' in c.lower() or 'nombre' in c.lower()), df.columns[3])].astype(str).str.strip().str.upper()
+            df["vendedor"] = df[next((c for c in df.columns if 'vend' in c.lower() or 'ases' in c.lower()), df.columns[4])].astype(str).str.strip().str.upper()
+            df["canal de venta"] = df[next((c for c in df.columns if 'canal' in c.lower()), df.columns[5])].astype(str).str.strip().str.upper()
+            df["comentario"] = df[next((c for c in df.columns if 'coment' in c.lower() or 'descrip' in c.lower() or 'queja' in c.lower()), df.columns[6])].astype(str).str.strip().str.upper()
+            df["Reporte tratado por"] = df[next((c for c in df.columns if 'report' in c.lower() or 'tratad' in c.lower() or 'estad' in c.lower()), df.columns[7])].astype(str).str.strip().str.upper()
             
         return df
     except Exception as e:
@@ -597,7 +603,7 @@ try:
                     st.warning("El asesor seleccionado no cuenta con registros fechados para estructurar el desglose anual.")
 
         # ==========================================================
-        # ⚠️ TAB 4: GESTIÓN DE QUEJAS (INTERACTIVIDAD CRUZADA DINÁMICA 2025+)
+        # ⚠️ TAB 4: GESTIÓN DE QUEJAS (SOLUCIONADO ERROR DE EMBUDO + TABLA CORRECTA)
         # ==========================================================
         with tab_quejas:
             st.header("⚠️ Auditoría y Gestión de Quejas de Clientes")
@@ -614,12 +620,11 @@ try:
                     sector_filtrado = st.selectbox("🎯 Filtrar por Sector Afectado:", options=sectores_disponibles, index=0, key="sb_ctrl_sector")
                     
                 with fc2:
-                    # El filtro de categorías se adapta dinámicamente al sector seleccionado
                     df_temp_cat = df_q if sector_filtrado == "TODOS" else df_q[df_q["Sector Afectado"] == sector_filtrado]
                     categorias_disponibles = ["TODOS"] + sorted(list(df_temp_cat["Categorizacion del Reclamo"].dropna().unique()))
                     categoria_filtrada = st.selectbox("📂 Filtrar por Categorización del Reclamo:", options=categorias_disponibles, index=0, key="sb_ctrl_categoria")
 
-                # --- APLICACIÓN DE LA INTERACTIVIDAD CRUZADA AL DATAFRAME BASE ---
+                # --- APLICACIÓN DE LOS FILTROS DINÁMICOS AL DATAFRAME ---
                 df_q_filtrado = df_q.copy()
                 if sector_filtrado != "TODOS":
                     df_q_filtrado = df_q_filtrado[df_q_filtrado["Sector Afectado"] == sector_filtrado]
@@ -630,7 +635,7 @@ try:
                 st.markdown("---")
                 tot_quejas = len(df_q_filtrado)
                 
-                # Para calcular la Tasa Operativa analizamos si hay una resolución definitiva en la columna
+                # Para calcular la Tasa Operativa analizamos si el caso tiene resolución en la columna 'Reporte tratado por'
                 casos_resueltos = df_q_filtrado[df_q_filtrado["Reporte tratado por"].str.contains("CERR|SOLUC|FINALIZ|OK|OK TALLER", na=False, case=False)]
                 tot_resueltos = len(casos_resueltos)
                 tot_abiertos = tot_quejas - tot_resueltos
@@ -646,7 +651,7 @@ try:
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # --- FILA DE GRÁFICOS INTERACTIVOS (EMBUDO + COLUMNAS) ---
+                # --- FILA DE GRÁFICOS INTERACTIVOS (EMBUDO CORREGIDO + COLUMNAS) ---
                 cg_col1, cg_col2 = st.columns(2)
                 
                 with cg_col1:
@@ -655,10 +660,11 @@ try:
                     df_funnel.columns = ["Categorizacion del Reclamo", "Casos"]
                     
                     if not df_funnel.empty:
-                        # Gráfico de Embudo nativo e interactivo de Plotly
+                        # 💡 SOLUCIÓN DEL ERROR: Reemplazado 'color_continuous_scale' por 'color_discrete_sequence'
                         fig_funnel = px.funnel(df_funnel.head(12), x="Casos", y="Categorizacion del Reclamo",
-                                               color="Casos", color_continuous_scale="Reds")
-                        fig_funnel.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), coloraxis_showscale=False)
+                                               color="Categorizacion del Reclamo", 
+                                               color_discrete_sequence=px.colors.sequential.Reds_r)
+                        fig_funnel.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
                         st.plotly_chart(fig_funnel, use_container_width=True, key="funnel_quejas_dinamico")
                     else:
                         st.info("Sin registros cargados para estructurar el Embudo en esta selección.")
@@ -669,7 +675,6 @@ try:
                     df_sectores.columns = ["Sector Afectado", "Casos"]
                     
                     if not df_sectores.empty:
-                        # Gráfico de Columnas Verticales Reactivo
                         fig_sectores = px.bar(df_sectores.head(12), x="Sector Afectado", y="Casos",
                                               text="Casos", color="Casos", color_continuous_scale="Oranges")
                         fig_sectores.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, coloraxis_showscale=False)
@@ -677,18 +682,18 @@ try:
                     else:
                         st.info("Sin registros cargados para estructurar las barras de sectores en esta selección.")
                 
-                # --- CENTRAL DE MONITOREO DINÁMICO (TABLA DE CLIENTES FILTRADA) ---
+                # --- CENTRAL DE MONITOREO DINÁMICO (TABLA DE CLIENTES EN EL ORDEN PEDIDO) ---
                 st.markdown("---")
                 st.markdown("### 🔍 Central de Monitoreo Dinámico")
                 st.markdown("La siguiente tabla responde automáticamente a los filtros cruzados superiores y a la búsqueda por palabra clave.")
                 
-                # Creamos la visualización formateando la fecha de gestión
+                # Clonamos y formateamos la fecha de gestión
                 df_visual_q = df_q_filtrado.copy()
                 if "Fecha_Filtro" in df_visual_q.columns:
-                    df_visual_q["Fecha"] = df_visual_q["Fecha_Filtro"].dt.strftime('%d/%m/%Y')
+                    df_visual_q["Fecha de Gestión"] = df_visual_q["Fecha_Filtro"].dt.strftime('%d/%m/%Y')
                 
-                # Renombramos y ordenamos la tabla con las 8 columnas requeridas por el usuario
-                columnas_solicitadas = ["Fecha", "tipo de queja", "marca", "cliente", "vendedor", "canal de venta", "comentario", "Reporte tratado por"]
+                # Construcción precisa de tus 8 columnas en el orden estricto solicitado
+                columnas_solicitadas = ["tipo de queja", "marca", "cliente", "vendedor", "canal de venta", "comentario", "Fecha de Gestión", "Reporte tratado por"]
                 df_tabla_final = df_visual_q[columnas_solicitadas].rename(columns={
                     "tipo de queja": "Tipo de Queja",
                     "marca": "Marca",
@@ -699,7 +704,7 @@ try:
                     "Reporte tratado por": "Reporte Tratado Por"
                 })
                 
-                # Buscador dinámico por palabra clave dentro de toda la tabla de quejas
+                # Buscador por palabra clave
                 buscar_queja = st.text_input("🔍 Buscar quejas específicas por palabra clave:", "", key="search_quejas_dinamico_input").strip()
                 if buscar_queja:
                     mascara = df_tabla_final.astype(str).apply(lambda x: x.str.contains(buscar_queja, case=False, na=False)).any(axis=1)
