@@ -26,13 +26,22 @@ def load_data(url, tipo_base):
         # Normalización estructural según el origen de datos
         if tipo_base == "Encuestas de Marca":
             df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
+            
+            # Ajuste implementado: Limpieza estricta de la columna Vendedor para evitar duplicados
+            if "Vendedor" in df.columns:
+                df["Vendedor"] = df["Vendedor"].astype(str).str.strip().str.upper()
         else:
             # Base Interna - Validamos variantes de acentos para evitar fallas de lectura
             col_fecha = "Fecha de último contacto" if "Fecha de último contacto" in df.columns else "Fecha de ultimo contacto"
             df["Fecha de ultimo contacto"] = pd.to_datetime(df[col_fecha], dayfirst=True, errors='coerce')
             df["MARCA"] = df["MARCA"]
             df["Canal de Venta"] = df["CANAL DE VENTA"]
-            df["Vendedor"] = df["VENDEDOR"]
+            
+            # Ajuste implementado: Limpieza estricta de la columna Vendedor removiendo espacios fantasmas
+            if "VENDEDOR" in df.columns:
+                df["Vendedor"] = df["VENDEDOR"].astype(str).str.strip().str.upper()
+            else:
+                df["Vendedor"] = "SIN VENDEDOR"
             
             # Mapeo de la columna cliente para la tabla de comentarios
             if "Cliente" in df.columns:
@@ -75,7 +84,6 @@ def get_bar_color(val):
     if val >= 90: return '#FBC02D'
     return '#D32F2F'
 
-# --- CORREGIDO: SE ELIMINÓ EL PARÁMETRO 'bold' INVÁLIDO EN PLOTLY ---
 def crear_gauge_moderno(valor, titulo, objetivo=94.0):
     color_viva = get_bar_color(valor)
     fig = go.Figure(go.Indicator(
@@ -263,7 +271,6 @@ try:
                 val_m_q1, p_m_q1, n_m_q1, d_m_q1, t_m_q1 = calcular_nps_detallado(df_m_base[MAPA_M['q1']])
                 nps_m_q2, p_m_q2, n_m_q2, d_m_q2, _ = calcular_nps_detallado(df_m_base[MAPA_M['q2']])
 
-                # Cards Envolventes KPI (Sugerencia 1)
                 with st.container(border=True):
                     cm_q1, cm_q2, cm_tot = st.columns([2.2, 2.2, 0.8])
                     with cm_q1:
@@ -321,7 +328,6 @@ try:
                 df_m_v["Fecha de ultimo contacto"] = df_m_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
                 df_m_v = df_m_v.rename(columns={MAPA_M['q3']: 'Comentario Textual'})
                 
-                # Buscador Dinámico por Palabra Clave (Sugerencia 3)
                 busqueda_m = st.text_input("🔍 Buscar en comentarios de Marca:", "", key="search_m").strip()
                 if busqueda_m:
                     df_m_v = df_m_v[df_m_v['Comentario Textual'].str.contains(busqueda_m, case=False, na=False)]
@@ -337,7 +343,6 @@ try:
                 d_i_q1 = (serie_csi < 7.0).sum()
                 nps_i_q2, p_i_q2, n_i_q2, d_i_q2, _ = calcular_nps_detallado(df_i_base[MAPA_I['q2']])
 
-                # Cards Envolventes KPI (Sugerencia 1)
                 with st.container(border=True):
                     ci_q1, ci_q2, ci_tot = st.columns([2.2, 2.2, 0.8])
                     with ci_q1:
@@ -384,7 +389,6 @@ try:
                 df_i_v["Fecha de ultimo contacto"] = df_i_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
                 df_i_v = df_i_v.rename(columns={MAPA_I['q3']: 'Comentario Textual'})
                 
-                # Buscador Dinámico por Palabra Clave (Sugerencia 3)
                 busqueda_i = st.text_input("🔍 Buscar en comentarios Internos:", "", key="search_i").strip()
                 if busqueda_i:
                     df_i_v = df_i_v[df_i_v['Comentario Textual'].str.contains(busqueda_i, case=False, na=False)]
@@ -435,7 +439,6 @@ try:
                 
                 df_master = pd.DataFrame(resumen_master).sort_values("Muestra M", ascending=False)
                 
-                # Alertas Mates y Fondos Limpios (Sugerencia 4)
                 def color_celda_nps_master(val):
                     try:
                         v = float(val)
