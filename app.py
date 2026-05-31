@@ -52,9 +52,9 @@ def load_data(url, tipo_base):
             # 1. Mapeo inteligente y flexible de columnas por aproximación de texto
             col_fecha = next((c for c in df.columns if 'fech' in c.lower()), None)
             col_cliente = next((c for c in df.columns if 'client' in c.lower() or 'nombre' in c.lower()), None)
-            col_motivo = next((c for c in df.columns if 'motiv' in c.lower() or 'categor' in c.lower() or 'queja' in c.lower() or 'reclamo' in c.lower()), None)
-            col_estado = next((c for c in df.columns if 'estad' in c.lower() or 'resol' in c.lower()), None)
-            col_responsable = next((c for c in df.columns if 'respons' in c.lower() or 'asign' in c.lower() or 'asesor' in c.lower()), None)
+            col_motivo = next((c for c in df.columns if 'motiv' in c.lower() or 'categor' in c.lower() or 'queja' in c.lower() or 'reclamo' in c.lower() or 'descrip' in c.lower()), None)
+            col_estado = next((c for c in df.columns if 'estad' in c.lower() or 'resol' in c.lower() or 'situac' in c.lower()), None)
+            col_responsable = next((c for c in df.columns if 'respons' in c.lower() or 'asign' in c.lower() or 'asesor' in c.lower() or 'vended' in c.lower()), None)
             
             # 2. Inyección de columnas normalizadas para que los gráficos no fallen
             df["Fecha_Filtro"] = pd.to_datetime(df[col_fecha], dayfirst=True, errors='coerce') if col_fecha else pd.to_datetime(df.iloc[:, 0], errors='coerce')
@@ -195,7 +195,7 @@ try:
     # --- CARGA SIMULTÁNEA DE BASES ---
     df_m = load_data(URL_MARCA, "Encuestas de Marca")
     df_i = load_data(URL_INTERNA, "Encuestas Internas")
-    df_q = load_data(URL_QUEJAS, "Gestión de Quejas") # Carga de la nueva hoja de Quejas
+    df_q = load_data(URL_QUEJAS, "Gestión de Quejas")
     
     if not df_m.empty and not df_i.empty:
         
@@ -272,7 +272,6 @@ try:
 
         st.title("📊 Panel Integrado de Calidad - Autociel")
         
-        # Agregamos la 4ta pestaña al set de Tabs del portal
         tab_global, tab_unificada, tab_individual, tab_quejas = st.tabs([
             "🏠 Monitor Global Comparativo", 
             "👥 Tabla Unificada de Asesores", 
@@ -281,7 +280,7 @@ try:
         ])
 
         # ==========================================================
-        # TAB 1: MONITOR GLOBAL (Doble Columna en Pantalla)
+        # TAB 1: MONITOR GLOBAL
         # ==========================================================
         with tab_global:
             st.header(f"Resultados en Paralelo: {', '.join(meses_sel_nombres)}")
@@ -598,7 +597,7 @@ try:
                     st.warning("El asesor seleccionado no cuenta con registros fechados para estructurar el desglose anual.")
 
         # ==========================================================
-        # ⚠️ TAB 4: GESTIÓN DE QUEJAS (NUEVA INTERFAZ EXCLUSIVA 2025+)
+        # ⚠️ TAB 4: GESTIÓN DE QUEJAS (SOLUCIONADO ERROR DE BARRA)
         # ==========================================================
         with tab_quejas:
             st.header("⚠️ Auditoría y Gestión de Quejas de Clientes")
@@ -608,8 +607,8 @@ try:
                 # --- FILA DE METRICAS PRINCIPALES ---
                 tot_quejas = len(df_q)
                 
-                # Intentamos agrupar para ver casos resueltos si existiera la data mapeada
-                casos_cerrados = df_q[df_q["Estado_Limpiado"].str.contains("CERR|SOLUC|FINALIZ|OK", na=False, case=False)]
+                # Mapeo de estados: consideramos casos cerrados si el texto contiene palabras clave finales
+                casos_cerrados = df_q[df_q["Estado_Limpiado"].str.contains("CERR|SOLUC|FINALIZ|OK|TERMIN", na=False, case=False)]
                 tot_cerrados = len(casos_cerrados)
                 tot_abiertos = tot_quejas - tot_cerrados
                 tasa_resolucion = (tot_cerrados / tot_quejas * 100) if tot_quejas > 0 else 0.0
@@ -633,9 +632,10 @@ try:
                     df_motivos.columns = ["Motivo", "Cantidad"]
                     
                     if not df_motivos.empty:
+                        # 💡 CAMBIO DE ARGUMENTO: De 'color_continuous_sequence' a 'color_continuous_scale'
                         fig_motivos = px.bar(df_motivos.head(10), x="Cantidad", y="Motivo", orientation="h",
                                              text="Cantidad", color="Cantidad", 
-                                             color_continuous_sequence=px.colors.sequential.Reds)
+                                             color_continuous_scale="Reds")
                         fig_motivos.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, coloraxis_showscale=False)
                         st.plotly_chart(fig_motivos, use_container_width=True, key="grafico_motivos_quejas")
                     else:
@@ -647,9 +647,10 @@ try:
                     df_resp.columns = ["Responsable", "Casos"]
                     
                     if not df_resp.empty:
+                        # 💡 CAMBIO DE ARGUMENTO: De 'color_continuous_sequence' a 'color_continuous_scale'
                         fig_resp = px.bar(df_resp.head(10), x="Responsable", y="Casos",
                                            text="Casos", color="Casos",
-                                           color_continuous_sequence=px.colors.sequential.YlOrRd)
+                                           color_continuous_scale="Oranges")
                         fig_resp.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, coloraxis_showscale=False)
                         st.plotly_chart(fig_resp, use_container_width=True, key="grafico_responsables_quejas")
                     else:
@@ -659,12 +660,10 @@ try:
                 st.markdown("---")
                 st.markdown("### 🔍 Central de Monitoreo Dinámico")
                 
-                # Limpieza y preparación de la tabla visual para el usuario
                 df_visual_q = df_q.copy()
                 if "Fecha_Filtro" in df_visual_q.columns:
                     df_visual_q["Fecha"] = df_visual_q["Fecha_Filtro"].dt.strftime('%d/%m/%Y')
                 
-                # Columnas seleccionadas para mostrar de forma ejecutiva
                 columnas_mostrables = [c for c in ["Fecha", "Cliente_Limpiado", "Motivo_Limpiado", "Estado_Limpiado", "Responsable_Limpiado"] if c in df_visual_q.columns]
                 df_tabla_final = df_visual_q[columnas_mostrables].rename(columns={
                     "Cliente_Limpiado": "Cliente",
@@ -673,10 +672,8 @@ try:
                     "Responsable_Limpiado": "Responsable Asignado"
                 })
                 
-                # Buscador dinámico por palabra clave dentro de toda la tabla
                 buscar_queja = st.text_input("🔍 Buscar quejas específicas por palabra clave (ej. Taller, Demora, Factura, Asesor):", "", key="search_quejas_input").strip()
                 if buscar_queja:
-                    # Filtra en cualquier columna de texto de la tabla
                     mascara = df_tabla_final.astype(str).apply(lambda x: x.str.contains(buscar_queja, case=False, na=False)).any(axis=1)
                     df_tabla_final = df_tabla_final[mascara]
                 
