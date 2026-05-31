@@ -49,17 +49,20 @@ def load_data(url, tipo_base):
                 
         # --- NUEVA FUENTE: GESTIÓN DE QUEJAS (Filtro Estricto 2025+) ---
         elif tipo_base == "Gestión de Quejas":
-            # Mapeo estricto basado en las especificaciones del usuario
+            # Usar estrictamente 'Fecha de Gestión' como la fecha de auditoría
             df["Fecha_Filtro"] = pd.to_datetime(df["Fecha de Gestión"], dayfirst=True, errors='coerce')
             
-            # Forzamos filtro para quedarnos con datos del 2025 en adelante
+            # Filtro restrictivo temporal: Solo 2025 en adelante
             df = df[df["Fecha_Filtro"].dt.year >= 2025].copy()
             df["Anio"] = df["Fecha_Filtro"].dt.year
             df["Mes_Num"] = df["Fecha_Filtro"].dt.month
             
-            # Limpieza y normalización de textos para consistencia de nombres
-            columnas_texto = ["Categorizacion del Reclamo", "Sector Afectado", "tipo de queja", "marca", "cliente", "vendedor", "canal de venta", "Reporte tratado por"]
-            for col in columnas_texto:
+            # Normalización estricta de textos solicitada
+            columnas_quejas = [
+                "Categorizacion del Reclamo", "Sector Afectado", "tipo de queja", 
+                "marca", "cliente", "vendedor", "canal de venta", "comentario", "Reporte tratado por"
+            ]
+            for col in columnas_quejas:
                 if col in df.columns:
                     df[col] = df[col].astype(str).str.strip().str.upper()
                 else:
@@ -225,7 +228,7 @@ try:
         df_i['Anio'] = df_i["Fecha de ultimo contacto"].dt.year
         df_i['Mes_Num'] = df_i["Fecha de ultimo contacto"].dt.month
 
-        # Categorizaciones para clics basadas en NPS
+        # Categorizaciones estructurales para clics basadas en NPS
         def generar_categorias(val):
             v = pd.to_numeric(val, errors='coerce')
             if pd.isna(v): return "Sin Datos"
@@ -611,7 +614,7 @@ try:
                     sector_filtrado = st.selectbox("🎯 Filtrar por Sector Afectado:", options=sectores_disponibles, index=0, key="sb_ctrl_sector")
                     
                 with fc2:
-                    # El filtro de categorías se adapta al sector seleccionado para no mostrar datos vacíos
+                    # El filtro de categorías se adapta dinámicamente al sector seleccionado
                     df_temp_cat = df_q if sector_filtrado == "TODOS" else df_q[df_q["Sector Afectado"] == sector_filtrado]
                     categorias_disponibles = ["TODOS"] + sorted(list(df_temp_cat["Categorizacion del Reclamo"].dropna().unique()))
                     categoria_filtrada = st.selectbox("📂 Filtrar por Categorización del Reclamo:", options=categorias_disponibles, index=0, key="sb_ctrl_categoria")
@@ -627,7 +630,7 @@ try:
                 st.markdown("---")
                 tot_quejas = len(df_q_filtrado)
                 
-                # Para calcular la Tasa Operativa analizamos si hay un responsable asignado/tratado definitivo en la columna
+                # Para calcular la Tasa Operativa analizamos si hay una resolución definitiva en la columna
                 casos_resueltos = df_q_filtrado[df_q_filtrado["Reporte tratado por"].str.contains("CERR|SOLUC|FINALIZ|OK|OK TALLER", na=False, case=False)]
                 tot_resueltos = len(casos_resueltos)
                 tot_abiertos = tot_quejas - tot_resueltos
@@ -690,9 +693,9 @@ try:
                     "tipo de queja": "Tipo de Queja",
                     "marca": "Marca",
                     "cliente": "Cliente",
-                    "vendedor": "Vendedor / Asesor",
+                    "vendedor": "Vendedor",
                     "canal de venta": "Canal de Venta",
-                    "comentario": "Comentario Textual",
+                    "comentario": "Comentario",
                     "Reporte tratado por": "Reporte Tratado Por"
                 })
                 
