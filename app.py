@@ -9,6 +9,7 @@ st.set_page_config(page_title="Tablero de Indicadores - Autociel", layout="wide"
 
 URL_MARCA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=567460007"
 URL_INTERNA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=1131519764"
+URL_QUEJAS = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=863634651"
 
 # --- FUNCIONES DE DATOS Y CÁLCULOS ---
 def limpiar_comas_a_numerico(serie):
@@ -20,15 +21,17 @@ def limpiar_comas_a_numerico(serie):
 @st.cache_data(ttl=600)
 def load_data(url, tipo_base):
     try:
-        csv_url = url.replace("/edit#gid=", "/export?format=csv&gid=").replace("/edit?gid=", "/export?format=csv&gid=")
+        csv_url = url.replace("/edit#gid=", "/export?format=csv&gid=").replace("/edit?gid=", "/export?format=csv&gid=").replace("#gid=", "&gid=")
         df = pd.read_csv(csv_url)
         
-        # Normalización estructural según el origen de datos
+        # --- NORMALIZACIÓN ENCUESTAS DE MARCA ---
         if tipo_base == "Encuestas de Marca":
             df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
             if "Vendedor" in df.columns:
                 df["Vendedor"] = df["Vendedor"].astype(str).str.strip().str.upper()
-        else:
+                
+        # --- NORMALIZACIÓN ENCUESTAS INTERNAS ---
+        elif tipo_base == "Encuestas Internas":
             col_fecha = "Fecha de último contacto" if "Fecha de último contacto" in df.columns else "Fecha de ultimo contacto"
             df["Fecha de ultimo contacto"] = pd.to_datetime(df[col_fecha], dayfirst=True, errors='coerce')
             df["MARCA"] = df["MARCA"]
@@ -44,6 +47,27 @@ def load_data(url, tipo_base):
             elif "Nombre de cliente" not in df.columns:
                 df["Nombre de cliente"] = "Cliente Autociel"
                 
+        # --- NUEVA FUENTE: GESTIÓN DE QUEJAS (Filtro 2025+) ---
+        elif tipo_base == "Gestión de Quejas":
+            # 1. Mapeo inteligente y flexible de columnas por aproximación de texto
+            col_fecha = next((c for c in df.columns if 'fech' in c.lower()), None)
+            col_cliente = next((c for c in df.columns if 'client' in c.lower() or 'nombre' in c.lower()), None)
+            col_motivo = next((c for c in df.columns if 'motiv' in c.lower() or 'categor' in c.lower() or 'queja' in c.lower() or 'reclamo' in c.lower()), None)
+            col_estado = next((c for c in df.columns if 'estad' in c.lower() or 'resol' in c.lower()), None)
+            col_responsable = next((c for c in df.columns if 'respons' in c.lower() or 'asign' in c.lower() or 'asesor' in c.lower()), None)
+            
+            # 2. Inyección de columnas normalizadas para que los gráficos no fallen
+            df["Fecha_Filtro"] = pd.to_datetime(df[col_fecha], dayfirst=True, errors='coerce') if col_fecha else pd.to_datetime(df.iloc[:, 0], errors='coerce')
+            df["Cliente_Limpiado"] = df[col_cliente].astype(str).str.strip() if col_cliente else "Cliente Autociel"
+            df["Motivo_Limpiado"] = df[col_motivo].astype(str).str.strip().str.upper() if col_motivo else "RECLAMO GENERAL"
+            df["Estado_Limpiado"] = df[col_estado].astype(str).str.strip().str.upper() if col_estado else "ABIERTO"
+            df["Responsable_Limpiado"] = df[col_responsable].astype(str).str.strip().str.upper() if col_responsable else "SIN ASIGNAR"
+            
+            # 3. Restricción estricta: Solo analizar a partir del año 2025 en adelante
+            df = df[df["Fecha_Filtro"].dt.year >= 2025].copy()
+            df["Anio"] = df["Fecha_Filtro"].dt.year
+            df["Mes_Num"] = df["Fecha_Filtro"].dt.month
+            
         return df
     except Exception as e:
         st.error(f"Error al cargar datos ({tipo_base}): {e}")
@@ -171,6 +195,7 @@ try:
     # --- CARGA SIMULTÁNEA DE BASES ---
     df_m = load_data(URL_MARCA, "Encuestas de Marca")
     df_i = load_data(URL_INTERNA, "Encuestas Internas")
+    df_q = load_data(URL_QUEJAS, "Gestión de Quejas") # Carga de la nueva hoja de Quejas
     
     if not df_m.empty and not df_i.empty:
         
@@ -194,11 +219,10 @@ try:
             'lbl_q1': 'CSI GENERAL (PROMEDIO %)', 'lbl_q2': '1. RECOMENDACIÓN (NPS)'
         }
 
-        # Asegurar conversión explícita a Datetime
+        # Asegurar conversión explícita a Datetime e inyección de Año/Mes base
         df_m["Fecha de ultimo contacto"] = pd.to_datetime(df_m["Fecha de ultimo contacto"], errors='coerce')
         df_i["Fecha de ultimo contacto"] = pd.to_datetime(df_i["Fecha de ultimo contacto"], errors='coerce')
-
-        # Agregamos Año y Mes base para uso general
+        
         df_m['Anio'] = df_m["Fecha de ultimo contacto"].dt.year
         df_m['Mes_Num'] = df_m["Fecha de ultimo contacto"].dt.month
         df_i['Anio'] = df_i["Fecha de ultimo contacto"].dt.year
@@ -248,14 +272,16 @@ try:
 
         st.title("📊 Panel Integrado de Calidad - Autociel")
         
-        tab_global, tab_unificada, tab_individual = st.tabs([
+        # Agregamos la 4ta pestaña al set de Tabs del portal
+        tab_global, tab_unificada, tab_individual, tab_quejas = st.tabs([
             "🏠 Monitor Global Comparativo", 
             "👥 Tabla Unificada de Asesores", 
-            "👤 Ficha Individual por Asesor"
+            "👤 Ficha Individual por Asesor",
+            "⚠️ Gestión de Quejas"
         ])
 
         # ==========================================================
-        # TAB 1: MONITOR GLOBAL
+        # TAB 1: MONITOR GLOBAL (Doble Columna en Pantalla)
         # ==========================================================
         with tab_global:
             st.header(f"Resultados en Paralelo: {', '.join(meses_sel_nombres)}")
@@ -457,20 +483,18 @@ try:
                 st.dataframe(df_styled, use_container_width=True, hide_index=True)
 
         # ==========================================================
-        # 👤 TAB 3: FICHA INDIVIDUAL POR ASESOR (NUEVA LÓGICA)
+        # 👤 TAB 3: FICHA INDIVIDUAL POR ASESOR (HISTÓRICA)
         # ==========================================================
         with tab_individual:
             st.header("📈 Evolución Histórica Completa por Asesor")
             st.markdown("Esta sección analiza la información **total acumulada** sin restricciones de filtros globales.")
             
-            # Unimos los vendedores considerando las listas completas (sin filtros globales)
             vendedores_disponibles = sorted(list(set(df_m["Vendedor"].dropna().unique()) | set(df_i["Vendedor"].dropna().unique())))
             
             if vendedores_disponibles:
                 vendedor_sel = st.selectbox("Seleccione el Asesor a evaluar:", options=vendedores_disponibles, key="sb_vendedor_ficha_ind")
                 st.markdown(f"## Desempeño Histórico de: **{vendedor_sel}**")
                 
-                # --- PROCESAMIENTO HISTÓRICO DE MARCA ---
                 df_vend_full_m = df_m[df_m["Vendedor"] == vendedor_sel].copy()
                 if not df_vend_full_m.empty:
                     df_vend_full_m["Periodo"] = df_vend_full_m["Fecha de ultimo contacto"].dt.to_period("M")
@@ -482,7 +506,6 @@ try:
                 else:
                     df_ev_m = pd.DataFrame()
 
-                # --- PROCESAMIENTO HISTÓRICO INTERNO ---
                 df_vend_full_i = df_i[df_i["Vendedor"] == vendedor_sel].copy()
                 if not df_vend_full_i.empty:
                     df_vend_full_i["Periodo"] = df_vend_full_i["Fecha de ultimo contacto"].dt.to_period("M")
@@ -494,7 +517,6 @@ try:
                 else:
                     df_ev_i = pd.DataFrame()
 
-                # --- FILA DE METRICAS TOTALES HISTÓRICAS ---
                 col_m1, col_m2 = st.columns(2)
                 with col_m1:
                     with st.container(border=True):
@@ -511,7 +533,6 @@ try:
                         else:
                             st.info("Sin registros históricos en la base Interna.")
 
-                # --- FILA DE GRÁFICOS DE LÍNEAS HISTÓRICOS ---
                 col_g1, col_g2 = st.columns(2)
                 with col_g1:
                     st.markdown("#### 🏢 Línea del Tiempo: Encuestas de Marca")
@@ -538,29 +559,21 @@ try:
                     else:
                         st.caption("No hay datos suficientes para graficar.")
 
-                # --- 🔍 FILTRO DE AÑO INTERNO Y DESGLOSE EN TABLA ---
                 st.markdown("---")
                 st.markdown("### 📅 Análisis Detallado por Año Seleccionado")
                 
-                # Buscamos los años en los que este vendedor tiene datos reales
                 anios_vendedor = sorted(list(set(df_vend_full_m['Anio'].dropna().unique().astype(int)) | set(df_vend_full_i['Anio'].dropna().unique().astype(int))), reverse=True)
                 
                 if anios_vendedor:
                     anio_tabla = st.selectbox("Seleccione el año que desea desglosar:", options=anios_vendedor, key="sb_anio_tabla_individual")
-                    
-                    # Filtramos las respuestas del vendedor para ese año puntual
                     df_tabla_m = df_vend_full_m[df_vend_full_m['Anio'] == anio_tabla]
                     df_tabla_i = df_vend_full_i[df_vend_full_i['Anio'] == anio_tabla]
                     
-                    # Generamos el consolidado mensual
-                    meses_del_anio = range(1, 13)
                     tabla_datos = []
-                    
-                    for m_num in meses_del_anio:
+                    for m_num in range(1, 13):
                         sub_m = df_tabla_m[df_tabla_m['Mes_Num'] == m_num]
                         sub_i = df_tabla_i[df_tabla_i['Mes_Num'] == m_num]
                         
-                        # Si no hay datos en ningún origen para este mes, saltamos la fila
                         if sub_m.empty and sub_i.empty:
                             continue
                             
@@ -583,6 +596,94 @@ try:
                         st.info(f"No se registran encuestas en ningún mes para el año {anio_tabla}.")
                 else:
                     st.warning("El asesor seleccionado no cuenta con registros fechados para estructurar el desglose anual.")
+
+        # ==========================================================
+        # ⚠️ TAB 4: GESTIÓN DE QUEJAS (NUEVA INTERFAZ EXCLUSIVA 2025+)
+        # ==========================================================
+        with tab_quejas:
+            st.header("⚠️ Auditoría y Gestión de Quejas de Clientes")
+            st.markdown("Análisis estratégico de insatisfacción, motivos operativos y reclamos ingresados **a partir del año 2025**.")
+            
+            if not df_q.empty:
+                # --- FILA DE METRICAS PRINCIPALES ---
+                tot_quejas = len(df_q)
+                
+                # Intentamos agrupar para ver casos resueltos si existiera la data mapeada
+                casos_cerrados = df_q[df_q["Estado_Limpiado"].str.contains("CERR|SOLUC|FINALIZ|OK", na=False, case=False)]
+                tot_cerrados = len(casos_cerrados)
+                tot_abiertos = tot_quejas - tot_cerrados
+                tasa_resolucion = (tot_cerrados / tot_quejas * 100) if tot_quejas > 0 else 0.0
+                
+                cq1, cq2, cq3 = st.columns(3)
+                with cq1:
+                    st.metric("Total Quejas Registradas (2025+)", f"{tot_quejas} casos")
+                with cq2:
+                    st.metric("Casos Activos / Abiertos", f"{tot_abiertos} pendientes")
+                with cq3:
+                    st.metric("Tasa de Resolución Operativa", f"{tasa_resolucion:.1f}%", f"{tot_cerrados} solucionados")
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # --- FILA DE GRÁFICOS DE CAUSA RAÍZ ---
+                cg_col1, cg_col2 = st.columns(2)
+                
+                with cg_col1:
+                    st.markdown("#### 🎯 Distribución por Motivo / Categoría del Reclamo")
+                    df_motivos = df_q["Motivo_Limpiado"].value_counts().reset_index()
+                    df_motivos.columns = ["Motivo", "Cantidad"]
+                    
+                    if not df_motivos.empty:
+                        fig_motivos = px.bar(df_motivos.head(10), x="Cantidad", y="Motivo", orientation="h",
+                                             text="Cantidad", color="Cantidad", 
+                                             color_continuous_sequence=px.colors.sequential.Reds)
+                        fig_motivos.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, coloraxis_showscale=False)
+                        st.plotly_chart(fig_motivos, use_container_width=True, key="grafico_motivos_quejas")
+                    else:
+                        st.caption("Faltan datos categóricos para estructurar el diagrama.")
+                        
+                with cg_col2:
+                    st.markdown("#### 👤 Casos por Responsable Asignado")
+                    df_resp = df_q["Responsable_Limpiado"].value_counts().reset_index()
+                    df_resp.columns = ["Responsable", "Casos"]
+                    
+                    if not df_resp.empty:
+                        fig_resp = px.bar(df_resp.head(10), x="Responsable", y="Casos",
+                                           text="Casos", color="Casos",
+                                           color_continuous_sequence=px.colors.sequential.YlOrRd)
+                        fig_resp.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, coloraxis_showscale=False)
+                        st.plotly_chart(fig_resp, use_container_width=True, key="grafico_responsables_quejas")
+                    else:
+                        st.caption("Faltan datos de responsables para estructurar el diagrama.")
+                
+                # --- TABLA DE SEGUIMIENTO CON BUSCADOR INTERACTIVO ---
+                st.markdown("---")
+                st.markdown("### 🔍 Central de Monitoreo Dinámico")
+                
+                # Limpieza y preparación de la tabla visual para el usuario
+                df_visual_q = df_q.copy()
+                if "Fecha_Filtro" in df_visual_q.columns:
+                    df_visual_q["Fecha"] = df_visual_q["Fecha_Filtro"].dt.strftime('%d/%m/%Y')
+                
+                # Columnas seleccionadas para mostrar de forma ejecutiva
+                columnas_mostrables = [c for c in ["Fecha", "Cliente_Limpiado", "Motivo_Limpiado", "Estado_Limpiado", "Responsable_Limpiado"] if c in df_visual_q.columns]
+                df_tabla_final = df_visual_q[columnas_mostrables].rename(columns={
+                    "Cliente_Limpiado": "Cliente",
+                    "Motivo_Limpiado": "Motivo / Descripción",
+                    "Estado_Limpiado": "Estado",
+                    "Responsable_Limpiado": "Responsable Asignado"
+                })
+                
+                # Buscador dinámico por palabra clave dentro de toda la tabla
+                buscar_queja = st.text_input("🔍 Buscar quejas específicas por palabra clave (ej. Taller, Demora, Factura, Asesor):", "", key="search_quejas_input").strip()
+                if buscar_queja:
+                    # Filtra en cualquier columna de texto de la tabla
+                    mascara = df_tabla_final.astype(str).apply(lambda x: x.str.contains(buscar_queja, case=False, na=False)).any(axis=1)
+                    df_tabla_final = df_tabla_final[mascara]
+                
+                st.dataframe(df_tabla_final, use_container_width=True, hide_index=True, height=250)
+                
+            else:
+                st.info("No se encontraron registros de quejas o reclamos correspondientes a los años 2025 o 2026 en la hoja origen.")
 
 except Exception as e:
     st.error(f"Error en la ejecución del Tablero Integrado: {e}")
