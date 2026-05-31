@@ -26,24 +26,19 @@ def load_data(url, tipo_base):
         # Normalización estructural según el origen de datos
         if tipo_base == "Encuestas de Marca":
             df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
-            
-            # Ajuste implementado: Limpieza estricta de la columna Vendedor para evitar duplicados
             if "Vendedor" in df.columns:
                 df["Vendedor"] = df["Vendedor"].astype(str).str.strip().str.upper()
         else:
-            # Base Interna - Validamos variantes de acentos para evitar fallas de lectura
             col_fecha = "Fecha de último contacto" if "Fecha de último contacto" in df.columns else "Fecha de ultimo contacto"
             df["Fecha de ultimo contacto"] = pd.to_datetime(df[col_fecha], dayfirst=True, errors='coerce')
             df["MARCA"] = df["MARCA"]
             df["Canal de Venta"] = df["CANAL DE VENTA"]
             
-            # Ajuste implementado: Limpieza estricta de la columna Vendedor removiendo espacios fantasmas
             if "VENDEDOR" in df.columns:
                 df["Vendedor"] = df["VENDEDOR"].astype(str).str.strip().str.upper()
             else:
                 df["Vendedor"] = "SIN VENDEDOR"
             
-            # Mapeo de la columna cliente para la tabla de comentarios
             if "Cliente" in df.columns:
                 df["Nombre de cliente"] = df["Cliente"]
             elif "Nombre de cliente" not in df.columns:
@@ -203,6 +198,12 @@ try:
         df_m["Fecha de ultimo contacto"] = pd.to_datetime(df_m["Fecha de ultimo contacto"], errors='coerce')
         df_i["Fecha de ultimo contacto"] = pd.to_datetime(df_i["Fecha de ultimo contacto"], errors='coerce')
 
+        # Agregamos Año y Mes base para uso general
+        df_m['Anio'] = df_m["Fecha de ultimo contacto"].dt.year
+        df_m['Mes_Num'] = df_m["Fecha de ultimo contacto"].dt.month
+        df_i['Anio'] = df_i["Fecha de ultimo contacto"].dt.year
+        df_i['Mes_Num'] = df_i["Fecha de ultimo contacto"].dt.month
+
         # Categorizaciones estructurales para clics basadas en NPS
         def generar_categorias(val):
             v = pd.to_numeric(val, errors='coerce')
@@ -219,10 +220,6 @@ try:
 
         # --- SIDEBAR (FILTROS GLOBALES UNIFICADOS) ---
         st.sidebar.header("Filtros Globales")
-        df_m['Anio'] = df_m["Fecha de ultimo contacto"].dt.year
-        df_m['Mes_Num'] = df_m["Fecha de ultimo contacto"].dt.month
-        df_i['Anio'] = df_i["Fecha de ultimo contacto"].dt.year
-        df_i['Mes_Num'] = df_i["Fecha de ultimo contacto"].dt.month
         
         anios_combinados = sorted(list(set(df_m['Anio'].dropna().unique().astype(int)) | set(df_i['Anio'].dropna().unique().astype(int))), reverse=True)
         anio_sel = st.sidebar.selectbox("Año", options=anios_combinados if anios_combinados else [2026], key="sb_anio_unif")
@@ -258,14 +255,12 @@ try:
         ])
 
         # ==========================================================
-        # TAB 1: MONITOR GLOBAL (Doble Columna en Pantalla)
+        # TAB 1: MONITOR GLOBAL
         # ==========================================================
         with tab_global:
             st.header(f"Resultados en Paralelo: {', '.join(meses_sel_nombres)}")
-            
             sc_marca, sc_interna = st.columns([1, 1])
             
-            # --- PANEL DE MARCA (IZQUIERDA) ---
             with sc_marca:
                 st.markdown("### 🏢 Datos de Origen: Encuestas de Marca")
                 val_m_q1, p_m_q1, n_m_q1, d_m_q1, t_m_q1 = calcular_nps_detallado(df_m_base[MAPA_M['q1']])
@@ -333,7 +328,6 @@ try:
                     df_m_v = df_m_v[df_m_v['Comentario Textual'].str.contains(busqueda_m, case=False, na=False)]
                 st.dataframe(df_m_v, use_container_width=True, hide_index=True, height=180)
 
-            # --- PANEL INTERNO (DERECHA) ---
             with sc_interna:
                 st.markdown("### 🎯 Datos de Origen: Encuestas Internas")
                 val_i_q1, t_i_q1 = calcular_csi_directo_porcentaje(df_i_base[MAPA_I['q1']])
@@ -463,69 +457,132 @@ try:
                 st.dataframe(df_styled, use_container_width=True, hide_index=True)
 
         # ==========================================================
-        # TAB 3: FICHA INDIVIDUAL POR ASESOR
+        # 👤 TAB 3: FICHA INDIVIDUAL POR ASESOR (NUEVA LÓGICA)
         # ==========================================================
         with tab_individual:
-            st.header("Evolución Histórica por Asesor (Comparativa de Fuentes)")
-            vendedores_disponibles = sorted(list(set(df_m_base["Vendedor"].dropna().unique()) | set(df_i_base["Vendedor"].dropna().unique())))
+            st.header("📈 Evolución Histórica Completa por Asesor")
+            st.markdown("Esta sección analiza la información **total acumulada** sin restricciones de filtros globales.")
+            
+            # Unimos los vendedores considerando las listas completas (sin filtros globales)
+            vendedores_disponibles = sorted(list(set(df_m["Vendedor"].dropna().unique()) | set(df_i["Vendedor"].dropna().unique())))
             
             if vendedores_disponibles:
-                vendedor_sel = st.selectbox("Seleccione el Asesor a evaluar:", options=vendedores_disponibles, key="sb_vendedor_unif")
-                st.markdown(f"### Desempeño de: **{vendedor_sel}**")
+                vendedor_sel = st.selectbox("Seleccione el Asesor a evaluar:", options=vendedores_disponibles, key="sb_vendedor_ficha_ind")
+                st.markdown(f"## Desempeño Histórico de: **{vendedor_sel}**")
                 
-                col_ficha_m, col_ficha_i = st.columns(2)
-                
-                with col_ficha_m:
-                    st.markdown("#### 🏢 Histórico de Marca")
-                    df_vend_m = df_m_base[df_m_base["Vendedor"] == vendedor_sel]
-                    
-                    if not df_vend_m.empty:
-                        df_vend_full_m = df_m[(df_m["Vendedor"] == vendedor_sel) & (df_m["MARCA"].isin(marcas)) & (df_m["Canal de Venta"].isin(canales))].copy()
-                        df_vend_full_m["Periodo"] = df_vend_full_m["Fecha de ultimo contacto"].dt.to_period("M")
-                        
-                        resumen_mensual_m = []
-                        for per, data_m in df_vend_full_m.groupby("Periodo"):
-                            n_m, _, _, _, _ = calcular_nps_detallado(data_m[MAPA_M['q2']])
-                            resumen_mensual_m.append({"Periodo_Str": str(per), "Periodo": per, "NPS": n_m})
-                        
-                        df_ev_m = pd.DataFrame(resumen_mensual_m).sort_values("Periodo")
-                        vm_q2, _, _, _, tv2 = calcular_nps_detallado(df_vend_m[MAPA_M['q2']])
-                        st.metric("NPS Recomendación Actual (Marca)", f"{vm_q2:.1f}%", f"Muestra: {tv2} encuestas")
-                        
-                        if not df_ev_m.empty:
-                            fig_m = px.line(df_ev_m, x="Periodo_Str", y="NPS", text=df_ev_m["NPS"].round(1).astype(str) + "%", labels={"Periodo_Str": "Mes", "NPS": "NPS Marca %"}, markers=True)
-                            fig_m.add_hline(y=94, line_dash="dash", line_color="green", annotation_text="Objetivo (94%)")
-                            fig_m.update_traces(textposition="top center", line=dict(color='#2E7D32', width=3))
-                            fig_m.update_layout(yaxis=dict(range=[-100, 110]), height=240, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                            st.plotly_chart(fig_m, use_container_width=True, key="linea_ev_marca")
-                    else:
-                        st.info("Sin registros en la base de Marca para este asesor.")
+                # --- PROCESAMIENTO HISTÓRICO DE MARCA ---
+                df_vend_full_m = df_m[df_m["Vendedor"] == vendedor_sel].copy()
+                if not df_vend_full_m.empty:
+                    df_vend_full_m["Periodo"] = df_vend_full_m["Fecha de ultimo contacto"].dt.to_period("M")
+                    resumen_mensual_m = []
+                    for per, data_m in df_vend_full_m.groupby("Periodo"):
+                        n_m, _, _, _, tm_p = calcular_nps_detallado(data_m[MAPA_M['q2']])
+                        resumen_mensual_m.append({"Periodo_Str": str(per), "Periodo": per, "NPS": n_m, "Muestra": tm_p})
+                    df_ev_m = pd.DataFrame(resumen_mensual_m).sort_values("Periodo")
+                else:
+                    df_ev_m = pd.DataFrame()
 
-                with col_ficha_i:
-                    st.markdown("#### 🎯 Histórico Interno")
-                    df_vend_i = df_i_base[df_i_base["Vendedor"] == vendedor_sel]
-                    
-                    if not df_vend_i.empty:
-                        df_vend_full_i = df_i[(df_i["Vendedor"] == vendedor_sel) & (df_i["MARCA"].isin(marcas)) & (df_i["Canal de Venta"].isin(canales))].copy()
-                        df_vend_full_i["Periodo"] = df_vend_full_i["Fecha de ultimo contacto"].dt.to_period("M")
-                        
-                        resumen_mensual_i = []
-                        for per, data_m in df_vend_full_i.groupby("Periodo"):
-                            n_m, _, _, _, _ = calcular_nps_detallado(data_m[MAPA_I['q2']])
-                            resumen_mensual_i.append({"Periodo_Str": str(per), "Periodo": per, "NPS": n_m})
-                        
-                        df_ev_i = pd.DataFrame(resumen_mensual_i).sort_values("Periodo")
-                        vi_q2, _, _, _, tv2_i = calcular_nps_detallado(df_vend_i[MAPA_I['q2']])
-                        st.metric("NPS Recomendación Actual (Interno)", f"{vi_q2:.1f}%", f"Muestra: {tv2_i} encuestas")
-                        
-                        if not df_ev_i.empty:
-                            fig_i = px.line(df_ev_i, x="Periodo_Str", y="NPS", text=df_ev_i["NPS"].round(1).astype(str) + "%", labels={"Periodo_Str": "Mes", "NPS": "NPS Interno %"}, markers=True)
-                            fig_i.add_hline(y=94, line_dash="dash", line_color="green", annotation_text="Objetivo (94%)")
-                            fig_i.update_traces(textposition="top center", line=dict(color='#007bff', width=3))
-                            fig_i.update_layout(yaxis=dict(range=[-100, 110]), height=240, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                            st.plotly_chart(fig_i, use_container_width=True, key="linea_ev_interna")
+                # --- PROCESAMIENTO HISTÓRICO INTERNO ---
+                df_vend_full_i = df_i[df_i["Vendedor"] == vendedor_sel].copy()
+                if not df_vend_full_i.empty:
+                    df_vend_full_i["Periodo"] = df_vend_full_i["Fecha de ultimo contacto"].dt.to_period("M")
+                    resumen_mensual_i = []
+                    for per, data_i in df_vend_full_i.groupby("Periodo"):
+                        n_i, _, _, _, ti_p = calcular_nps_detallado(data_i[MAPA_I['q2']])
+                        resumen_mensual_i.append({"Periodo_Str": str(per), "Periodo": per, "NPS": n_i, "Muestra": ti_p})
+                    df_ev_i = pd.DataFrame(resumen_mensual_i).sort_values("Periodo")
+                else:
+                    df_ev_i = pd.DataFrame()
+
+                # --- FILA DE METRICAS TOTALES HISTÓRICAS ---
+                col_m1, col_m2 = st.columns(2)
+                with col_m1:
+                    with st.container(border=True):
+                        if not df_vend_full_m.empty:
+                            tot_nps_m, _, _, _, tot_muest_m = calcular_nps_detallado(df_vend_full_m[MAPA_M['q2']])
+                            st.metric("NPS Recomendación Histórico Total (Marca)", f"{tot_nps_m:.1f}%", f"Muestra Total: {tot_muest_m} encuestas")
+                        else:
+                            st.info("Sin registros históricos en la base de Marca.")
+                with col_m2:
+                    with st.container(border=True):
+                        if not df_vend_full_i.empty:
+                            tot_nps_i, _, _, _, tot_muest_i = calcular_nps_detallado(df_vend_full_i[MAPA_I['q2']])
+                            st.metric("NPS Recomendación Histórico Total (Interno)", f"{tot_nps_i:.1f}%", f"Muestra Total: {tot_muest_i} encuestas")
+                        else:
+                            st.info("Sin registros históricos en la base Interna.")
+
+                # --- FILA DE GRÁFICOS DE LÍNEAS HISTÓRICOS ---
+                col_g1, col_g2 = st.columns(2)
+                with col_g1:
+                    st.markdown("#### 🏢 Línea del Tiempo: Encuestas de Marca")
+                    if not df_ev_m.empty:
+                        fig_m = px.line(df_ev_m, x="Periodo_Str", y="NPS", 
+                                        text=df_ev_m["NPS"].round(1).astype(str) + "%", 
+                                        labels={"Periodo_Str": "Mes / Periodo", "NPS": "NPS %"}, markers=True)
+                        fig_m.add_hline(y=94, line_dash="dash", line_color="green", annotation_text="Objetivo (94%)")
+                        fig_m.update_traces(textposition="top center", line=dict(color='#2E7D32', width=3))
+                        fig_m.update_layout(yaxis=dict(range=[-100, 110]), height=260, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig_m, use_container_width=True, key="canvas_ev_marca_ind")
                     else:
-                        st.info("Sin registros en la base Interna para este asesor.")
+                        st.caption("No hay datos suficientes para graficar.")
+                with col_g2:
+                    st.markdown("#### 🎯 Línea del Tiempo: Encuestas Internas")
+                    if not df_ev_i.empty:
+                        fig_i = px.line(df_ev_i, x="Periodo_Str", y="NPS", 
+                                        text=df_ev_i["NPS"].round(1).astype(str) + "%", 
+                                        labels={"Periodo_Str": "Mes / Periodo", "NPS": "NPS %"}, markers=True)
+                        fig_i.add_hline(y=94, line_dash="dash", line_color="green", annotation_text="Objetivo (94%)")
+                        fig_i.update_traces(textposition="top center", line=dict(color='#007bff', width=3))
+                        fig_i.update_layout(yaxis=dict(range=[-100, 110]), height=260, margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig_i, use_container_width=True, key="canvas_ev_interna_ind")
+                    else:
+                        st.caption("No hay datos suficientes para graficar.")
+
+                # --- 🔍 FILTRO DE AÑO INTERNO Y DESGLOSE EN TABLA ---
+                st.markdown("---")
+                st.markdown("### 📅 Análisis Detallado por Año Seleccionado")
+                
+                # Buscamos los años en los que este vendedor tiene datos reales
+                anios_vendedor = sorted(list(set(df_vend_full_m['Anio'].dropna().unique().astype(int)) | set(df_vend_full_i['Anio'].dropna().unique().astype(int))), reverse=True)
+                
+                if anios_vendedor:
+                    anio_tabla = st.selectbox("Seleccione el año que desea desglosar:", options=anios_vendedor, key="sb_anio_tabla_individual")
+                    
+                    # Filtramos las respuestas del vendedor para ese año puntual
+                    df_tabla_m = df_vend_full_m[df_vend_full_m['Anio'] == anio_tabla]
+                    df_tabla_i = df_vend_full_i[df_vend_full_i['Anio'] == anio_tabla]
+                    
+                    # Generamos el consolidado mensual
+                    meses_del_anio = range(1, 13)
+                    tabla_datos = []
+                    
+                    for m_num in meses_del_anio:
+                        sub_m = df_tabla_m[df_tabla_m['Mes_Num'] == m_num]
+                        sub_i = df_tabla_i[df_tabla_i['Mes_Num'] == m_num]
+                        
+                        # Si no hay datos en ningún origen para este mes, saltamos la fila
+                        if sub_m.empty and sub_i.empty:
+                            continue
+                            
+                        nps_m, _, _, _, count_m = calcular_nps_detallado(sub_m[MAPA_M['q2']]) if not sub_m.empty else (None, 0, 0, 0, 0)
+                        nps_i, _, _, _, count_i = calcular_nps_detallado(sub_i[MAPA_I['q2']]) if not sub_i.empty else (None, 0, 0, 0, 0)
+                        
+                        tabla_datos.append({
+                            "Mes": meses_n[m_num],
+                            "Muestra Marca": count_m,
+                            "NPS Marca %": f"{nps_m:.1f}%" if count_m > 0 else "Sin Datos",
+                            "Muestra Interna": count_i,
+                            "NPS Interno %": f"{nps_i:.1f}%" if count_i > 0 else "Sin Datos"
+                        })
+                    
+                    if tabla_datos:
+                        df_resumen_anio = pd.DataFrame(tabla_datos)
+                        st.markdown(f"**Desglose mensual de actividades durante el año {anio_tabla}:**")
+                        st.dataframe(df_resumen_anio, use_container_width=True, hide_index=True)
+                    else:
+                        st.info(f"No se registran encuestas en ningún mes para el año {anio_tabla}.")
+                else:
+                    st.warning("El asesor seleccionado no cuenta con registros fechados para estructurar el desglose anual.")
 
 except Exception as e:
     st.error(f"Error en la ejecución del Tablero Integrado: {e}")
