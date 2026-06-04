@@ -295,7 +295,7 @@ try:
             with sc_marca:
                 st.markdown("### 🏢 Datos de Origen: Encuestas de Marca")
                 val_m_q1, p_m_q1, n_m_q1, d_m_q1, t_m_q1 = calcular_nps_detallado(df_m_base[MAPA_M['q1']])
-                nps_m_q2, p_m_q2, n_m_q2, d_m_q2, _ = calcular_nps_detallado(df_m_base[MAPA_M['q2']])
+                nps_m_q2, p_m_q2, n_m_q2, d_m_q2, t_m_q2 = calcular_nps_detallado(df_m_base[MAPA_M['q2']])
 
                 with st.container(border=True):
                     cm_q1, cm_q2, cm_tot = st.columns([2.2, 2.2, 0.8])
@@ -367,7 +367,7 @@ try:
                 p_i_q1 = (serie_csi >= 9.0).sum()
                 n_i_q1 = ((serie_csi >= 7.0) & (serie_csi < 9.0)).sum()
                 d_i_q1 = (serie_csi < 7.0).sum()
-                nps_i_q2, p_i_q2, n_i_q2, d_i_q2, _ = calcular_nps_detallado(df_i_base[MAPA_I['q2']])
+                nps_i_q2, p_i_q2, n_i_q2, d_i_q2, t_i_q2 = calcular_nps_detallado(df_i_base[MAPA_I['q2']])
 
                 with st.container(border=True):
                     ci_q1, ci_q2, ci_tot = st.columns([2.2, 2.2, 0.8])
@@ -420,6 +420,10 @@ try:
                 if busqueda_i:
                     df_i_v = df_i_v[df_i_v['Comentario Textual'].str.contains(busqueda_i, case=False, na=False)]
                 st.dataframe(df_i_v, use_container_width=True, hide_index=True, height=180)
+
+            # --- CELEBRACIÓN ESPONTÁNEA DEL MONITOR GLOBAL ---
+            if (t_m_q2 > 0 and nps_m_q2 >= 100.0) or (t_i_q2 > 0 and nps_i_q2 >= 100.0):
+                st.balloons()
 
         # ==========================================================
         # TAB 2: TABLA UNIFICADA DE ASESORES
@@ -531,6 +535,7 @@ try:
                             tot_nps_m, _, _, _, tot_muest_m = calcular_nps_detallado(df_vend_full_m[MAPA_M['q2']])
                             st.metric("NPS Recomendación Histórico Total (Marca)", f"{tot_nps_m:.1f}%", f"Muestra Total: {tot_muest_m} encuestas")
                         else:
+                            tot_nps_m, tot_muest_m = 0.0, 0
                             st.info("Sin registros históricos en la base de Marca.")
                 with col_m2:
                     with st.container(border=True):
@@ -538,7 +543,12 @@ try:
                             tot_nps_i, _, _, _, tot_muest_i = calcular_nps_detallado(df_vend_full_i[MAPA_I['q2']])
                             st.metric("NPS Recomendación Histórico Total (Interno)", f"{tot_nps_i:.1f}%", f"Muestra Total: {tot_muest_i} encuestas")
                         else:
+                            tot_nps_i, tot_muest_i = 0.0, 0
                             st.info("Sin registros históricos en la base Interna.")
+
+                # --- CELEBRACIÓN ESPONTÁNEA EN AUDITORÍA INDIVIDUAL POR ASESOR ---
+                if (tot_muest_m > 0 and tot_nps_m >= 100.0) or (tot_muest_i > 0 and tot_nps_i >= 100.0):
+                    st.balloons()
 
                 col_g1, col_g2 = st.columns(2)
                 with col_g1:
