@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import math
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Tablero de Indicadores - Autociel", layout="wide")
+st.set_page_config(page_title="Indicadores y seguimiento de calidad de venta -Autociel", layout="wide")
 
 URL_MARCA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=567460007"
 URL_INTERNA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=1131519764"
@@ -276,7 +276,7 @@ try:
         df_m_base = df_m_time[(df_m_time["MARCA"].isin(marcas)) & (df_m_time["Canal de Venta"].isin(canales))]
         df_i_base = df_i_time[(df_i_time["MARCA"].isin(marcas)) & (df_i_time["Canal de Venta"].isin(canales))]
 
-        st.title("📊 Panel Integrado de Calidad - Autociel")
+        st.title("📊 Indicadores y seguimiento de calidad de venta -Autociel")
         
         tab_global, tab_unificada, tab_individual, tab_quejas = st.tabs([
             "🏠 Monitor Global Comparativo", 
@@ -349,6 +349,7 @@ try:
                     cp1.plotly_chart(crear_grafico_torta(df_m_sub, MAPA_M['q14'], 'Q14 - Contactado Posterior'), use_container_width=True, key="p_m_q14")
                     cp2.plotly_chart(crear_gauge_moderno(calcular_nps_detallado(df_m_sub[MAPA_M['q15']])[0], "Q15 - Sat. con el Contacto (NPS)"), use_container_width=True, key="g_m_q15")
 
+                st.markdown("---")
                 st.markdown("##### 💬 Verbalizaciones del Cliente (Marca)")
                 df_m_v = df_m_sub[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_M['q3'], "Vendedor"]].copy().sort_values("Fecha de ultimo contacto", ascending=False)
                 df_m_v["Fecha de ultimo contacto"] = df_m_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
@@ -409,6 +410,7 @@ try:
                     pi1.plotly_chart(crear_grafico_torta(df_i_sub, MAPA_I['q14'], 'Preg. 6 - Recepción Contacto'), use_container_width=True, key="p_i_p6")
                     pi2.plotly_chart(crear_gauge_moderno(calcular_nps_detallado(df_i_sub[MAPA_I['q15']])[0], "Preg. 7 - Sat. Contacto Posterior (NPS)"), use_container_width=True, key="g_i_p7")
 
+                st.markdown("---")
                 st.markdown("##### 💬 Verbalizaciones del Cliente (Internas)")
                 df_i_v = df_i_sub[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_I['q3'], "Vendedor"]].copy().sort_values("Fecha de ultimo contacto", ascending=False)
                 df_i_v["Fecha de ultimo contacto"] = df_i_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
