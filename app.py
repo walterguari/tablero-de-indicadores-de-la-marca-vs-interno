@@ -615,33 +615,45 @@ try:
                     st.warning("El asesor seleccionado no cuenta con registros fechados para estructurar el desglose anual.")
 
         # ==========================================================
-        # ⚠️ TAB 4: GESTIÓN DE QUEJAS (SOLUCIONADO ERROR DE EMBUDO + TABLA CORRECTA)
+        # ⚠️ TAB 4: GESTIÓN DE QUEJAS (NUEVOS FILTROS: AÑO Y CANAL DE VENTA)
         # ==========================================================
         with tab_quejas:
             st.header("⚠️ Auditoría y Gestión de Quejas de Clientes")
-            st.markdown("Análisis estratégico de insatisfacción y reclamos ingresados **a partir del año 2025**.")
+            st.markdown("Análisis estratégico de insatisfacción y reclamos ingresados.")
             
             if not df_q.empty:
                 
-                # --- PANEL DE CONTROL DE INTERACTIVIDAD INTERNA (Filtros Cruzados Dinámicos) ---
-                st.markdown("### 🔄 Panel de Filtro Cruzado")
+                # --- NUEVO PANEL DE CONTROL DE INTERACTIVIDAD INTERNA ---
+                st.markdown("### 🔄 Panel de Filtro")
                 fc1, fc2 = st.columns(2)
                 
                 with fc1:
-                    sectores_disponibles = ["TODOS"] + sorted(list(df_q["Sector Afectado"].dropna().unique()))
-                    sector_filtrado = st.selectbox("🎯 Filtrar por Sector Afectado:", options=sectores_disponibles, index=0, key="sb_ctrl_sector")
+                    # Aseguramos que Fecha_Filtro sea datetime para extraer el año correctamente
+                    if "Fecha_Filtro" in df_q.columns and not pd.api.types.is_datetime64_any_dtype(df_q["Fecha_Filtro"]):
+                        df_q["Fecha_Filtro"] = pd.to_datetime(df_q["Fecha_Filtro"])
+                    
+                    # Extraemos los años disponibles dinámicamente
+                    anos_disponibles = ["TODOS"] + sorted(list(df_q["Fecha_Filtro"].dt.year.dropna().unique()), reverse=True)
+                    # Convertimos a string para evitar problemas de formato al mostrar "TODOS" junto con números
+                    anos_disponibles = [str(a) for a in anos_disponibles]
+                    
+                    ano_filtrado = st.selectbox("📅 Filtrar por Año:", options=anos_disponibles, index=0, key="sb_ctrl_ano")
                     
                 with fc2:
-                    df_temp_cat = df_q if sector_filtrado == "TODOS" else df_q[df_q["Sector Afectado"] == sector_filtrado]
-                    categorias_disponibles = ["TODOS"] + sorted(list(df_temp_cat["Categorizacion del Reclamo"].dropna().unique()))
-                    categoria_filtrada = st.selectbox("📂 Filtrar por Categorización del Reclamo:", options=categorias_disponibles, index=0, key="sb_ctrl_categoria")
+                    # Filtro cruzado intermedio: si seleccionó un año, el canal muestra solo los disponibles para ese año
+                    df_temp_canal = df_q.copy()
+                    if ano_filtrado != "TODOS":
+                        df_temp_canal = df_temp_canal[df_temp_canal["Fecha_Filtro"].dt.year == int(ano_filtrado)]
+                        
+                    canales_disponibles = ["TODOS"] + sorted(list(df_temp_canal["canal de venta"].dropna().unique()))
+                    canal_filtrado = st.selectbox("🔌 Filtrar por Canal de Venta:", options=canales_disponibles, index=0, key="sb_ctrl_canal")
 
-                # --- APLICACIÓN DE LOS FILTROS DINÁMICOS AL DATAFRAME ---
+                # --- APLICACIÓN DE LOS NUEVOS FILTROS DINÁMICOS AL DATAFRAME ---
                 df_q_filtrado = df_q.copy()
-                if sector_filtrado != "TODOS":
-                    df_q_filtrado = df_q_filtrado[df_q_filtrado["Sector Afectado"] == sector_filtrado]
-                if categoria_filtrada != "TODOS":
-                    df_q_filtrado = df_q_filtrado[df_q_filtrado["Categorizacion del Reclamo"] == categoria_filtrada]
+                if ano_filtrado != "TODOS":
+                    df_q_filtrado = df_q_filtrado[df_q_filtrado["Fecha_Filtro"].dt.year == int(ano_filtrado)]
+                if canal_filtrado != "TODOS":
+                    df_q_filtrado = df_q_filtrado[df_q_filtrado["canal de venta"] == canal_filtrado]
 
                 # --- FILA DE METRICAS PRINCIPALES (DINÁMICAS) ---
                 st.markdown("---")
@@ -672,7 +684,6 @@ try:
                     df_funnel.columns = ["Categorizacion del Reclamo", "Casos"]
                     
                     if not df_funnel.empty:
-                        # 💡 SOLUCIÓN DEL ERROR: Reemplazado 'color_continuous_scale' por 'color_discrete_sequence'
                         fig_funnel = px.funnel(df_funnel.head(12), x="Casos", y="Categorizacion del Reclamo",
                                                color="Categorizacion del Reclamo", 
                                                color_discrete_sequence=px.colors.sequential.Reds_r)
@@ -697,7 +708,7 @@ try:
                 # --- CENTRAL DE MONITOREO DINÁMICO (TABLA DE CLIENTES EN EL ORDEN PEDIDO) ---
                 st.markdown("---")
                 st.markdown("### 🔍 Central de Monitoreo Dinámico")
-                st.markdown("La siguiente tabla responde automáticamente a los filtros cruzados superiores y a la búsqueda por palabra clave.")
+                st.markdown("La siguiente tabla responde automáticamente a los filtros superiores y a la búsqueda por palabra clave.")
                 
                 # Clonamos y formateamos la fecha de gestión
                 df_visual_q = df_q_filtrado.copy()
@@ -725,7 +736,6 @@ try:
                 st.dataframe(df_tabla_final, use_container_width=True, hide_index=True, height=280)
                 
             else:
-                st.info("No se encontraron registros de quejas correspondientes al criterio de filtro seleccionado.")
-
+                st.info("No se encontraron registros de quejas correspondientes al criterio de filtro seleccionado.")       
 except Exception as e:
     st.error(f"Error en la ejecución del Tablero Integrado: {e}")
