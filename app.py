@@ -197,6 +197,10 @@ try:
     if 'filtro_col_m' not in st.session_state: st.session_state.filtro_col_m = "Cat_Filtro_Dinamica"
     if 'filtro_val_i' not in st.session_state: st.session_state.filtro_val_i = "Todos"
     if 'filtro_col_i' not in st.session_state: st.session_state.filtro_col_i = "Cat_Filtro_Dinamica"
+    
+    # Estados de control para interactividad de la pestaña de quejas
+    if 'filtro_cat_q' not in st.session_state: st.session_state.filtro_cat_q = "Todas"
+    if 'filtro_sec_q' not in st.session_state: st.session_state.filtro_sec_q = "Todos"
 
     # --- CARGA SIMULTÁNEA DE BASES ---
     df_m = load_data(URL_MARCA, "Encuestas de Marca")
@@ -615,7 +619,7 @@ try:
                     st.warning("El asesor seleccionado no cuenta con registros fechados para estructurar el desglose anual.")
 
         # ==========================================================
-        # ⚠️ TAB 4: GESTIÓN DE QUEJAS (NUEVOS FILTROS: AÑO Y CANAL DE VENTA)
+        # ⚠️ TAB 4: GESTIÓN DE QUEJAS (NUEVOS FILTROS + BOTONES INTERACTIVOS)
         # ==========================================================
         with tab_quejas:
             st.header("⚠️ Auditoría y Gestión de Quejas de Clientes")
@@ -623,9 +627,9 @@ try:
             
             if not df_q.empty:
                 
-                # --- NUEVO PANEL DE CONTROL DE INTERACTIVIDAD INTERNA ---
+                # --- PANEL DE CONTROL DE INTERACTIVIDAD INTERNA ---
                 st.markdown("### 🔄 Panel de Filtro")
-                fc1, fc2 = st.columns(2)
+                fc1, fc2, fc3 = st.columns(3)
                 
                 with fc1:
                     # Aseguramos que Fecha_Filtro sea datetime para extraer el año correctamente
@@ -634,24 +638,38 @@ try:
                     
                     # Extraemos los años disponibles dinámicamente
                     anos_disponibles = ["TODOS"] + sorted(list(df_q["Fecha_Filtro"].dt.year.dropna().unique()), reverse=True)
-                    # Convertimos a string para evitar problemas de formato al mostrar "TODOS" junto con números
                     anos_disponibles = [str(a) for a in anos_disponibles]
-                    
                     ano_filtrado = st.selectbox("📅 Filtrar por Año:", options=anos_disponibles, index=0, key="sb_ctrl_ano")
                     
                 with fc2:
-                    # Filtro cruzado intermedio: si seleccionó un año, el canal muestra solo los disponibles para ese año
-                    df_temp_canal = df_q.copy()
+                    meses_dict = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6: "Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
+                    
+                    # Filtro cruzado en cascada para los meses
+                    df_temp_mes = df_q.copy()
                     if ano_filtrado != "TODOS":
-                        df_temp_canal = df_temp_canal[df_temp_canal["Fecha_Filtro"].dt.year == int(ano_filtrado)]
+                        df_temp_mes = df_temp_mes[df_temp_mes["Fecha_Filtro"].dt.year == int(ano_filtrado)]
+                        
+                    meses_disp_nums = sorted(list(df_temp_mes["Mes_Num"].dropna().unique()))
+                    meses_disponibles = ["TODOS"] + [meses_dict[int(m)] for m in meses_disp_nums]
+                    mes_filtrado = st.selectbox("🗓️ Filtrar por Mes:", options=meses_disponibles, index=0, key="sb_ctrl_mes")
+                    
+                with fc3:
+                    # Filtro cruzado en cascada para el canal de venta
+                    df_temp_canal = df_temp_mes.copy()
+                    if mes_filtrado != "TODOS":
+                        mes_num_sel = [k for k, v in meses_dict.items() if v == mes_filtrado][0]
+                        df_temp_canal = df_temp_canal[df_temp_canal["Mes_Num"] == mes_num_sel]
                         
                     canales_disponibles = ["TODOS"] + sorted(list(df_temp_canal["canal de venta"].dropna().unique()))
                     canal_filtrado = st.selectbox("🔌 Filtrar por Canal de Venta:", options=canales_disponibles, index=0, key="sb_ctrl_canal")
 
-                # --- APLICACIÓN DE LOS NUEVOS FILTROS DINÁMICOS AL DATAFRAME ---
+                # --- APLICACIÓN DE LOS FILTROS DINÁMICOS AL DATAFRAME ---
                 df_q_filtrado = df_q.copy()
                 if ano_filtrado != "TODOS":
                     df_q_filtrado = df_q_filtrado[df_q_filtrado["Fecha_Filtro"].dt.year == int(ano_filtrado)]
+                if mes_filtrado != "TODOS":
+                    mes_num_sel = [k for k, v in meses_dict.items() if v == mes_filtrado][0]
+                    df_q_filtrado = df_q_filtrado[df_q_filtrado["Mes_Num"] == mes_num_sel]
                 if canal_filtrado != "TODOS":
                     df_q_filtrado = df_q_filtrado[df_q_filtrado["canal de venta"] == canal_filtrado]
 
@@ -659,7 +677,6 @@ try:
                 st.markdown("---")
                 tot_quejas = len(df_q_filtrado)
                 
-                # Para calcular la Tasa Operativa analizamos si el caso tiene resolución en la columna 'Reporte tratado por'
                 casos_resueltos = df_q_filtrado[df_q_filtrado["Reporte tratado por"].str.contains("CERR|SOLUC|FINALIZ|OK|OK TALLER", na=False, case=False)]
                 tot_resueltos = len(casos_resueltos)
                 tot_abiertos = tot_quejas - tot_resueltos
@@ -675,7 +692,7 @@ try:
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # --- FILA DE GRÁFICOS INTERACTIVOS (EMBUDO CORREGIDO + COLUMNAS) ---
+                # --- FILA DE GRÁFICOS INTERACTIVOS (EMBUDO + COLUMNAS) ---
                 cg_col1, cg_col2 = st.columns(2)
                 
                 with cg_col1:
@@ -689,6 +706,24 @@ try:
                                                color_discrete_sequence=px.colors.sequential.Reds_r)
                         fig_funnel.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
                         st.plotly_chart(fig_funnel, use_container_width=True, key="funnel_quejas_dinamico")
+                        
+                        # --- BOTONES INTERACTIVOS (CATEGORÍA) ---
+                        st.markdown(f"**Filtrado por Categoría:** `{st.session_state.filtro_cat_q}`")
+                        cols_cat = st.columns(3)
+                        
+                        if cols_cat[0].button(" Ver Todas", key="btn_cat_todas", use_container_width=True):
+                            st.session_state.filtro_cat_q = "Todas"
+                            st.rerun()
+                            
+                        # Botones dinámicos para el Top 5 de categorías
+                        for i, row in df_funnel.head(5).reset_index(drop=True).iterrows():
+                            col_idx = (i + 1) % 3
+                            cat_nombre = str(row["Categorizacion del Reclamo"])
+                            btn_texto = f"📌 {cat_nombre[:14]}..." if len(cat_nombre) > 14 else f"📌 {cat_nombre}"
+                            
+                            if cols_cat[col_idx].button(btn_texto, key=f"btn_cat_din_{i}", help=cat_nombre, use_container_width=True):
+                                st.session_state.filtro_cat_q = cat_nombre
+                                st.rerun()
                     else:
                         st.info("Sin registros cargados para estructurar el Embudo en esta selección.")
                         
@@ -702,20 +737,43 @@ try:
                                               text="Casos", color="Casos", color_continuous_scale="Oranges")
                         fig_sectores.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, coloraxis_showscale=False)
                         st.plotly_chart(fig_sectores, use_container_width=True, key="barras_sectores_dinamico")
+                        
+                        # --- BOTONES INTERACTIVOS (SECTOR) ---
+                        st.markdown(f"**Filtrado por Sector:** `{st.session_state.filtro_sec_q}`")
+                        cols_sec = st.columns(3)
+                        
+                        if cols_sec[0].button(" Ver Todos", key="btn_sec_todos", use_container_width=True):
+                            st.session_state.filtro_sec_q = "Todos"
+                            st.rerun()
+                            
+                        # Botones dinámicos para el Top 5 de sectores
+                        for i, row in df_sectores.head(5).reset_index(drop=True).iterrows():
+                            col_idx = (i + 1) % 3
+                            sec_nombre = str(row["Sector Afectado"])
+                            btn_texto = f"📌 {sec_nombre[:14]}..." if len(sec_nombre) > 14 else f"📌 {sec_nombre}"
+                            
+                            if cols_sec[col_idx].button(btn_texto, key=f"btn_sec_din_{i}", help=sec_nombre, use_container_width=True):
+                                st.session_state.filtro_sec_q = sec_nombre
+                                st.rerun()
                     else:
                         st.info("Sin registros cargados para estructurar las barras de sectores en esta selección.")
                 
-                # --- CENTRAL DE MONITOREO DINÁMICO (TABLA DE CLIENTES EN EL ORDEN PEDIDO) ---
+                # --- CENTRAL DE MONITOREO DINÁMICO (TABLA DE CLIENTES FILTRADA) ---
                 st.markdown("---")
                 st.markdown("### 🔍 Central de Monitoreo Dinámico")
-                st.markdown("La siguiente tabla responde automáticamente a los filtros superiores y a la búsqueda por palabra clave.")
+                st.markdown("La siguiente tabla responde automáticamente a los filtros superiores y a los clics interactivos.")
                 
-                # Clonamos y formateamos la fecha de gestión
+                # Clonamos y aplicamos la selección interactiva de los gráficos
                 df_visual_q = df_q_filtrado.copy()
+                if st.session_state.filtro_cat_q != "Todas":
+                    df_visual_q = df_visual_q[df_visual_q["Categorizacion del Reclamo"] == st.session_state.filtro_cat_q]
+                if st.session_state.filtro_sec_q != "Todos":
+                    df_visual_q = df_visual_q[df_visual_q["Sector Afectado"] == st.session_state.filtro_sec_q]
+                
                 if "Fecha_Filtro" in df_visual_q.columns:
                     df_visual_q["Fecha de Gestión"] = df_visual_q["Fecha_Filtro"].dt.strftime('%d/%m/%Y')
                 
-                # Construcción precisa de tus 8 columnas en el orden estricto solicitado
+                # Construcción de tus 8 columnas en el orden estricto solicitado
                 columnas_solicitadas = ["tipo de queja", "marca", "cliente", "vendedor", "canal de venta", "comentario", "Fecha de Gestión", "Reporte tratado por"]
                 df_tabla_final = df_visual_q[columnas_solicitadas].rename(columns={
                     "tipo de queja": "Tipo de Queja",
